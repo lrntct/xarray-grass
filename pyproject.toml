@@ -1,0 +1,35 @@
+[project]
+name = "xarray-grass"
+version = "0.1.0"
+description = "An xarray backend for GRASS raster maps and space time raster datasets"
+authors = [
+    { name = "Laurent Courty", email = "lrntct@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "grass-session>=0.5",
+    "numpy>=2.2.5",
+    "xarray>=2025.4.0",
+]
+
+[project.urls]
+# Homepage = ""
+# Documentation = ""
+Repository = "https://github.com/lrntct/xarray-grass"
+Issues = "https://github.com/lrntct/xarray-grass/issues"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "requests>=2.32.3",
+    "ruff>=0.11.8",
+]
+
+[project.entry-points."xarray.backends"]
+my_engine = "xarray_grass.xarray_grass:GrassBackendEntrypoint"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+addopts = ["--import-mode=importlib"]
