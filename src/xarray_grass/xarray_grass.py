@@ -23,7 +23,7 @@ import xarray as xr
 
 class GrassBackendEntrypoint(BackendEntrypoint):
     """
-    Backend entry point for GRASS GIS."""
+    Backend entry point for GRASS mapset."""
 
     open_dataset_parameters = ["filename_or_obj", "drop_variables"]
     description = "Open GRASS mapset in Xarray"

@@ -1,6 +1,7 @@
 import hashlib
 from pathlib import Path
 import zipfile
+from tempfile import TemporaryDirectory
 
 import requests
 import pytest
@@ -55,9 +56,8 @@ def test_data_path() -> Path:
 @pytest.fixture(scope="session")
 def temp_gisdb(test_data_path: Path) -> GrassConfig:
     """create a temporary GISDB"""
-    # create grassdata directory
-    grassdata = test_data_path / Path("grassdata")
-    grassdata.mkdir(exist_ok=True)
+    tmp_dir = TemporaryDirectory(prefix="xarray_grass_test_")
+    grassdata = Path(tmp_dir.name)
     # NC sample data
     nc_sample_data = download_file(NC_BASIC_URL, test_data_path, NC_BASIC_SHA256)
     with zipfile.ZipFile(nc_sample_data, "r") as zip_ref:
@@ -67,9 +67,10 @@ def temp_gisdb(test_data_path: Path) -> GrassConfig:
     nc_modis_data = download_file(MODIS_URL, test_data_path, MODIS_SHA256)
     with zipfile.ZipFile(nc_modis_data, "r") as zip_ref:
         zip_ref.extractall(test_project)
-    return GrassConfig(
+    yield GrassConfig(
         gisdb=str(grassdata),
         project=str(test_project.stem),
         mapset="PERMANENT",
         grassbin=None,
     )
+    tmp_dir.cleanup()

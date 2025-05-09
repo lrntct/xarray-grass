@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple
 from dataclasses import dataclass
 from pathlib import Path
@@ -5,11 +6,16 @@ from typing import Self
 
 import numpy as np
 
+# Needed to be able to import grass modules
+import grass_session  # noqa: F401
 import grass.script as gscript
 import grass.pygrass.utils as gutils
 from grass.pygrass.gis.region import Region
 from grass.pygrass import raster as graster
 import grass.temporal as tgis
+
+
+gscript.core.set_raise_on_error(True)
 
 
 @dataclass
@@ -45,8 +51,13 @@ class GrassInterface(object):
         ),
     }
 
-    def __init__(self, region_id):
+    def __init__(self, region_id: str | None = None, overwrite: bool = False):
+        # Check if in a GRASS session
+        if "GISRC" not in os.environ:
+            raise RuntimeError("GRASS session not set.")
+        self.overwrite = overwrite
         # Set region
+        self.region_id = region_id
         if self.region_id:
             gscript.use_temp_region()
             gscript.run_command("g.region", region=region_id)
@@ -55,7 +66,7 @@ class GrassInterface(object):
         self.yr = self.region.rows
 
     @staticmethod
-    def format_id(name):
+    def format_id(name: str) -> str:
         """Take a map or stds name as input
         and return a fully qualified name, i.e. including mapset
         """
@@ -65,7 +76,7 @@ class GrassInterface(object):
             return "@".join((name, gutils.getenv("MAPSET")))
 
     @staticmethod
-    def name_is_stds(name):
+    def name_is_stds(name: str) -> bool:
         """return True if the name given as input is a registered strds
         False if not
         """
@@ -80,7 +91,7 @@ class GrassInterface(object):
         """
         return bool(gscript.find_file(name=map_id, element="cell").get("file"))
 
-    def grass_dtype(self, dtype):
+    def grass_dtype(self, dtype: str) -> str:
         if dtype in self.dtype_conv["DCELL"]:
             mtype = "DCELL"
         elif dtype in self.dtype_conv["CELL"]:
@@ -88,13 +99,13 @@ class GrassInterface(object):
         elif dtype in self.dtype_conv["FCELL"]:
             mtype = "FCELL"
         else:
-            assert False, "datatype incompatible with GRASS!"
+            raise ValueError("datatype incompatible with GRASS!")
         return mtype
 
-    def read_raster_map(self, rast_name):
+    def read_raster_map(self, rast_name: str) -> np.ndarray:
         """Read a GRASS raster and return a numpy array"""
         with graster.RasterRow(rast_name, mode="r") as rast:
-            array = np.array(rast, dtype=self.dtype)
+            array = np.array(rast)
         return array
 
     def write_raster_map(self, arr: np.ndarray, rast_name: str) -> Self:
