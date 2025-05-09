@@ -131,6 +131,7 @@ class GrassInterface(object):
         stds_name: str,
         stds_desc: str,
         map_list: list[tuple[str, datetime | timedelta]],
+        semantic: str,
         t_type: str,
     ) -> Self:
         """Create a STDS, create one mapdataset for each map and
@@ -146,7 +147,7 @@ class GrassInterface(object):
             temporaltype=t_type,
             title=stds_title,
             descr=stds_desc,
-            semantic="mean",
+            semantic=semantic,
             dbif=None,
             overwrite=self.overwrite,
         )

@@ -1,3 +1,6 @@
+from collections import namedtuple
+from datetime import datetime
+
 import pytest
 import numpy as np
 import grass_session
@@ -96,11 +99,63 @@ class TestGrassInterface:
     def test_write_raster_map(grass_session_fixture):
         grass_i = GrassInterface(region_id=None)
         rng = np.random.default_rng()
-        np_array = rng.integers(0, 255, size=(1350, 1500), dtype="uint8")
-        grass_i.write_raster_map(np_array, "test_write")
+        # tests cases
+        TestCase = namedtuple("TestCase", ["np_dtype", "g_dtype", "map_name"])
+        test_cases = [
+            TestCase(np_dtype=np.uint8, g_dtype="CELL", map_name="test_write_int"),
+            TestCase(np_dtype=np.float32, g_dtype="FCELL", map_name="test_write_f32"),
+            TestCase(np_dtype=np.float64, g_dtype="DCELL", map_name="test_write_f64"),
+        ]
+        for test_case in test_cases:
+            if test_case.g_dtype == "CELL":
+                np_array = rng.integers(
+                    0, 255, size=(1350, 1500), dtype=test_case.np_dtype
+                )
+            else:
+                np_array = rng.random(size=(1350, 1500), dtype=test_case.np_dtype)
+        grass_i.write_raster_map(np_array, test_case.map_name)
         map_info = gscript.parse_command(
-            "r.info", flags="g", map="test_write@PERMANENT"
+            "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
         )
         assert map_info["rows"] == "1350"
         assert map_info["cols"] == "1500"
-        assert map_info["datatype"] == "CELL"
+        assert map_info["datatype"] == test_case.g_dtype
+        # remove map
+        gscript.run_command(
+            "g.remove", flags="f", type="raster", name=test_case.map_name
+        )
+
+    def test_register_maps_in_stds(grass_session_fixture):
+        grass_i = GrassInterface(region_id=None)
+        rng = np.random.default_rng()
+        np_array = rng.random(size=(1350, 1500), dtype="float32")
+        grass_i.write_raster_map(np_array, "test_temporal_map1")
+        grass_i.write_raster_map(np_array, "test_temporal_map2")
+        maps_list = [
+            ("test_temporal_map1", datetime(2023, 1, 1)),
+            ("test_temporal_map2", datetime(2023, 2, 1)),
+        ]
+        grass_i.register_maps_in_stds(
+            stds_title="test_stds_title",
+            stds_name="test_stds",
+            stds_desc="test description of a STRDS",
+            semantic="mean",
+            map_list=maps_list,
+            t_type="absolute",
+        )
+        strds_info = gscript.parse_command(
+            "t.info",
+            flags="g",
+            type="strds",
+            input="test_stds@PERMANENT",
+        )
+        print(strds_info)
+        assert strds_info["name"] == "test_stds"
+        assert strds_info["mapset"] == "PERMANENT"
+        assert strds_info["id"] == "test_stds@PERMANENT"
+        assert strds_info["semantic_type"] == "mean"
+        assert strds_info["temporal_type"] == "absolute"
+        assert strds_info["number_of_maps"] == "2"
+        # remove extra single quotes from the returned string
+        assert strds_info["start_time"].strip("'") == str(datetime(2023, 1, 1))
+        assert strds_info["end_time"].strip("'") == str(datetime(2023, 2, 1))
