@@ -64,9 +64,10 @@ class TestGrassInterface:
         grass_i = GrassInterface(region_id=None)
         assert grass_i.name_is_stds(ACTUAL_STRDS) is True
         assert grass_i.name_is_stds(ACTUAL_RASTER_MAP) is False
-        assert grass_i.name_is_stds("not_a_real_map@PERMANENT") is False
+        assert grass_i.name_is_stds("not_a_real_strds@PERMANENT") is False
         with pytest.raises(gexceptions.FatalError):
-            grass_i.name_is_stds("not_a_real_map@NOT_A_MAPSET")
+            grass_i.name_is_stds("not_a_real_strds@NOT_A_MAPSET")
+            grass_i.name_is_stds("not_a_real_strds")
 
     def test_name_is_map(grass_session_fixture):
         grass_i = GrassInterface(region_id=None)
@@ -74,6 +75,15 @@ class TestGrassInterface:
         assert grass_i.name_is_map(ACTUAL_STRDS) is False
         assert grass_i.name_is_map("not_a_real_map@PERMANENT") is False
         assert grass_i.name_is_map("not_a_real_map@NOT_A_MAPSET") is False
+        assert grass_i.name_is_map("not_a_real_map") is False
+
+    def test_has_mask(grass_session_fixture):
+        grass_i = GrassInterface(region_id=None)
+        assert grass_i.has_mask() is False
+        gscript.run_command("r.mask", quiet=True, raster=ACTUAL_RASTER_MAP)
+        assert grass_i.has_mask() is True
+        gscript.run_command("r.mask", flags="r")
+        assert grass_i.has_mask() is False
 
     def test_read_raster_map(grass_session_fixture):
         grass_i = GrassInterface(region_id=None)

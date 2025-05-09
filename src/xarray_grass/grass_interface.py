@@ -1,6 +1,7 @@
 import os
 from collections import namedtuple
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Self
 
@@ -102,6 +103,10 @@ class GrassInterface(object):
             raise ValueError("datatype incompatible with GRASS!")
         return mtype
 
+    def has_mask(self) -> bool:
+        """Return True if the mapset has a mask, False otherwise."""
+        return bool(gscript.read_command("g.list", type="raster", pattern="MASK"))
+
     def read_raster_map(self, rast_name: str) -> np.ndarray:
         """Read a GRASS raster and return a numpy array"""
         with graster.RasterRow(rast_name, mode="r") as rast:
@@ -118,4 +123,65 @@ class GrassInterface(object):
                 newrow[:] = row[:]
                 newraster.put_row(newrow)
 
+        return self
+
+    def register_maps_in_stds(
+        self,
+        stds_title: str,
+        stds_name: str,
+        stds_desc: str,
+        map_list: list[tuple[str, datetime | timedelta]],
+        t_type: str,
+    ) -> Self:
+        """Create a STDS, create one mapdataset for each map and
+        register them in the temporal database.
+        TODO: add support for units other than seconds
+        """
+        # create stds
+        stds_id = self.format_id(stds_name)
+        stds_desc = ""
+        stds = tgis.open_new_stds(
+            name=stds_id,
+            type="strds",
+            temporaltype=t_type,
+            title=stds_title,
+            descr=stds_desc,
+            semantic="mean",
+            dbif=None,
+            overwrite=self.overwrite,
+        )
+
+        # create MapDataset objects list
+        map_dts_lst = []
+        for map_name, map_time in map_list:
+            # create MapDataset
+            map_id = self.format_id(map_name)
+            map_dts = tgis.RasterDataset(map_id)
+            # load spatial data from map
+            map_dts.load()
+            # set time
+            if t_type == "relative":
+                if not isinstance(map_time, timedelta):
+                    raise TypeError("relative time requires a timedelta object.")
+                rel_time = map_time.total_seconds()
+                map_dts.set_relative_time(rel_time, None, "seconds")
+            elif t_type == "absolute":
+                if not isinstance(map_time, datetime):
+                    raise TypeError("absolute time requires a datetime object.")
+                map_dts.set_absolute_time(start_time=map_time)
+            else:
+                raise ValueError(
+                    f"Invalid temporal type {t_type}, must be 'relative' or 'absolute'"
+                )
+            # populate the list of MapDataset objects
+            map_dts_lst.append(map_dts)
+        # Finally register the maps
+        t_unit = {"relative": "seconds", "absolute": ""}
+        tgis.register.register_map_object_list(
+            type="raster",
+            map_list=map_dts_lst,
+            output_stds=stds,
+            delete_empty=True,
+            unit=t_unit[t_type],
+        )
         return self
