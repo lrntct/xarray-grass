@@ -86,7 +86,7 @@ class GrassInterface(object):
         return bool(tgis.SpaceTimeRasterDataset(name).is_in_db())
 
     @staticmethod
-    def name_is_map(map_id):
+    def name_is_map(map_id: str) -> bool:
         """return True if the given name is a map in the grass database
         False if not
         """
