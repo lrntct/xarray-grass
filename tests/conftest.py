@@ -11,9 +11,9 @@ from xarray_grass import GrassConfig
 NC_BASIC_URL = (
     "https://grass.osgeo.org/sampledata/north_carolina/nc_basic_spm_grass7.zip"
 )
-MODIS_URL = "https://grass.osgeo.org/sampledata/north_carolina/nc_spm_mapset_modis2015_2016_lst.zip"
+MODIS_URL = "https://grass.osgeo.org/sampledata/north_carolina/nc_spm_mapset_modis2015_2016_lst_grass8.zip"
 NC_BASIC_SHA256 = "f24e564de45c1b19cafca3e15d3f7fbdd844b6a11d733b36d3e36207e4c0b676"
-MODIS_SHA256 = "06b78ea035464d155b221375a1ad2f81a76f6a35462cb4ebb87c9a34a19a58e0"
+MODIS_SHA256 = "a9d8fd8b30c511feeeb8ce7ee5d8da70eaa6e7b233161a9d1b1a7ce694bcccba"
 
 
 def sha256(file_path: Path) -> str:

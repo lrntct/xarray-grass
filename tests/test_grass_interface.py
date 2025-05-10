@@ -88,6 +88,16 @@ class TestGrassInterface:
         gscript.run_command("r.mask", flags="r")
         assert grass_i.has_mask() is False
 
+    def test_list_strds(grass_session_fixture):
+        grass_i = GrassInterface(region_id=None)
+        strds_list = grass_i.list_strds()
+        assert strds_list == [ACTUAL_STRDS]
+
+    def test_list_maps_in_strds(grass_session_fixture):
+        grass_i = GrassInterface(region_id=None)
+        map_list = grass_i.list_maps_in_strds(ACTUAL_STRDS)
+        assert len(map_list) == 24
+
     def test_read_raster_map(grass_session_fixture):
         grass_i = GrassInterface(region_id=None)
         np_map = grass_i.read_raster_map(ACTUAL_RASTER_MAP)

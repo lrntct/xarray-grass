@@ -107,6 +107,22 @@ class GrassInterface(object):
         """Return True if the mapset has a mask, False otherwise."""
         return bool(gscript.read_command("g.list", type="raster", pattern="MASK"))
 
+    def list_strds(self) -> list[tuple[str, str, str]]:
+        return tgis.tlist("strds")
+
+    def list_maps_in_strds(self, strds_name: str) -> list[MapData]:
+        strds = tgis.open_stds.open_old_stds(strds_name, "strds")
+        maplist = strds.get_registered_maps(
+            columns=",".join(self.strds_cols), order="start_time"
+        )
+        # check if every map exist
+        maps_not_found = [m[0] for m in maplist if not self.name_is_map(m[0])]
+        if any(maps_not_found):
+            err_msg = "STRDS <{}>: Can't find following maps: {}"
+            str_lst = ",".join(maps_not_found)
+            raise RuntimeError(err_msg.format(strds_name, str_lst))
+        return [self.MapData(*i) for i in maplist]
+
     def read_raster_map(self, rast_name: str) -> np.ndarray:
         """Read a GRASS raster and return a numpy array"""
         with graster.RasterRow(rast_name, mode="r") as rast:
