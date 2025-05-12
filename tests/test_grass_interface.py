@@ -108,6 +108,22 @@ class TestGrassInterface:
         strds_list = GrassInterface.list_strds()
         assert strds_list == [ACTUAL_STRDS]
 
+    def test_get_strds_infos(grass_session_fixture):
+        grass_i = GrassInterface(region_id=None)
+        strds_infos = grass_i.get_strds_infos(ACTUAL_STRDS)
+        assert strds_infos.id == ACTUAL_STRDS
+        assert strds_infos.temporal_type == "absolute"
+        assert strds_infos.time_unit is None
+        assert strds_infos.start_time == datetime(2015, 1, 1, 0, 0)
+        assert strds_infos.end_time == datetime(2017, 1, 1, 0, 0)
+        assert strds_infos.time_granularity == "1 month"
+        assert strds_infos.north == pytest.approx(760180.12411493)
+        assert strds_infos.south == pytest.approx(-415819.87588507)
+        assert strds_infos.east == pytest.approx(1550934.46411531)
+        assert strds_infos.west == pytest.approx(-448265.53588469)
+        assert strds_infos.top == 0.0
+        assert strds_infos.bottom == 0.0
+
     def test_list_maps_in_strds(grass_session_fixture):
         grass_i = GrassInterface(region_id=None)
         map_list = grass_i.list_maps_in_strds(ACTUAL_STRDS)

@@ -27,11 +27,28 @@ class GrassConfig:
     grassbin: str | Path
 
 
+strds_cols = ["id", "start_time", "end_time"]
+MapData = namedtuple("MapData", strds_cols)
+strds_infos = [
+    "id",
+    "temporal_type",
+    "time_unit",
+    "start_time",
+    "end_time",
+    "time_granularity",
+    "north",
+    "south",
+    "east",
+    "west",
+    "top",
+    "bottom",
+]
+STRDSInfos = namedtuple("STRDSInfos", strds_infos)
+
+
 class GrassInterface(object):
     """Interface to GRASS GIS for reading and writing raster data."""
 
-    strds_cols = ["id", "start_time", "end_time"]
-    MapData = namedtuple("MapData", strds_cols)
     # datatype conversion between GRASS and numpy
     dtype_conv = {
         "FCELL": ("float16", "float32"),
@@ -125,13 +142,42 @@ class GrassInterface(object):
         return bool(gscript.read_command("g.list", type="raster", pattern="MASK"))
 
     @staticmethod
-    def list_strds() -> list[tuple[str, str, str]]:
+    def list_strds() -> list[str]:
         return tgis.tlist("strds")
+
+    def get_strds_infos(self, strds_name) -> STRDSInfos:
+        strds_id = self.format_id(strds_name)
+        strds = tgis.open_stds.open_old_stds(strds_id, "strds")
+        temporal_type = strds.get_temporal_type()
+        if temporal_type == "relative":
+            start_time, end_time, time_unit = strds.get_relative_time()
+        elif temporal_type == "absolute":
+            start_time, end_time = strds.get_absolute_time()
+            time_unit = None
+        else:
+            raise ValueError(f"Unknown temporal type for {strds_id}: {temporal_type}")
+        granularity = strds.get_granularity()
+        spatial_extent = strds.get_spatial_extent_as_tuple()
+        infos = STRDSInfos(
+            id=strds_id,
+            temporal_type=temporal_type,
+            time_unit=time_unit,
+            start_time=start_time,
+            end_time=end_time,
+            time_granularity=granularity,
+            north=spatial_extent[0],
+            south=spatial_extent[1],
+            east=spatial_extent[2],
+            west=spatial_extent[3],
+            top=spatial_extent[4],
+            bottom=spatial_extent[5],
+        )
+        return infos
 
     def list_maps_in_strds(self, strds_name: str) -> list[MapData]:
         strds = tgis.open_stds.open_old_stds(strds_name, "strds")
         maplist = strds.get_registered_maps(
-            columns=",".join(self.strds_cols), order="start_time"
+            columns=",".join(strds_cols), order="start_time"
         )
         # check if every map exist
         maps_not_found = [m[0] for m in maplist if not self.name_is_map(m[0])]
@@ -139,7 +185,7 @@ class GrassInterface(object):
             err_msg = "STRDS <{}>: Can't find following maps: {}"
             str_lst = ",".join(maps_not_found)
             raise RuntimeError(err_msg.format(strds_name, str_lst))
-        return [self.MapData(*i) for i in maplist]
+        return [MapData(*i) for i in maplist]
 
     @staticmethod
     def read_raster_map(rast_name: str) -> np.ndarray:
