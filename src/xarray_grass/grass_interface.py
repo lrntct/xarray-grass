@@ -74,6 +74,7 @@ class GrassInterface(object):
         if "GISRC" not in os.environ:
             raise RuntimeError("GRASS session not set.")
         self.overwrite = overwrite
+        tgis.init()
         # Set region
         self.region_id = region_id
         if self.region_id:
@@ -96,7 +97,7 @@ class GrassInterface(object):
         return gscript.locn_is_latlong()
 
     @staticmethod
-    def format_id(name: str) -> str:
+    def get_id_from_name(name: str) -> str:
         """Take a map or stds name as input
         and return a fully qualified name, i.e. including mapset
         """
@@ -104,6 +105,18 @@ class GrassInterface(object):
             return name
         else:
             return "@".join((name, gutils.getenv("MAPSET")))
+
+    @staticmethod
+    def get_name_from_id(input_string: str) -> str:
+        """Take a map id and return a base name, i.e without mapset"""
+        try:
+            at_index = input_string.find("@")
+        except AttributeError:
+            raise TypeError(f"{input_string} not a string")
+        if at_index != -1:
+            return input_string[:at_index]
+        else:
+            return input_string
 
     @staticmethod
     def name_is_stds(name: str) -> bool:
@@ -146,7 +159,7 @@ class GrassInterface(object):
         return tgis.tlist("strds")
 
     def get_strds_infos(self, strds_name) -> STRDSInfos:
-        strds_id = self.format_id(strds_name)
+        strds_id = self.get_id_from_name(strds_name)
         strds = tgis.open_stds.open_old_stds(strds_id, "strds")
         temporal_type = strds.get_temporal_type()
         if temporal_type == "relative":
@@ -220,7 +233,7 @@ class GrassInterface(object):
         TODO: add support for units other than seconds
         """
         # create stds
-        stds_id = self.format_id(stds_name)
+        stds_id = self.get_id_from_name(stds_name)
         stds_desc = ""
         stds = tgis.open_new_stds(
             name=stds_id,
@@ -237,7 +250,7 @@ class GrassInterface(object):
         map_dts_lst = []
         for map_name, map_time in map_list:
             # create MapDataset
-            map_id = self.format_id(map_name)
+            map_id = self.get_id_from_name(map_name)
             map_dts = tgis.RasterDataset(map_id)
             # load spatial data from map
             map_dts.load()

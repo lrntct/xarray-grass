@@ -3,27 +3,17 @@ from datetime import datetime
 
 import pytest
 import numpy as np
-import grass_session
+
+# Needed to import grass modules
+import grass_session  # noqa: F401
 import grass.script as gscript
 import grass.exceptions as gexceptions
 
-from xarray_grass import GrassConfig, GrassInterface
+from xarray_grass import GrassInterface
 
 
 ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
 ACTUAL_RASTER_MAP = "elevation@PERMANENT"
-
-
-@pytest.fixture(scope="class")
-def grass_session_fixture(temp_gisdb: GrassConfig):
-    """Initialize a GRASS session for tests."""
-    with grass_session.Session(
-        gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
-    ) as session:
-        # add the mapset to the session
-        gscript.run_command("g.mapsets", mapset="modis_lst")
-        yield session
-        session.close()
 
 
 def test_no_grass_session():
@@ -56,14 +46,27 @@ class TestGrassInterface:
     def test_is_latlon(grass_session_fixture):
         assert GrassInterface.is_latlon() is False
 
-    def test_format_id(grass_session_fixture):
-        assert GrassInterface.format_id("test_map") == "test_map@PERMANENT"
-        assert GrassInterface.format_id("test_map@PERMANENT") == "test_map@PERMANENT"
-        assert GrassInterface.format_id("") == "@PERMANENT"
+    def test_get_id_from_name(grass_session_fixture):
+        assert GrassInterface.get_id_from_name("test_map") == "test_map@PERMANENT"
+        assert (
+            GrassInterface.get_id_from_name("test_map@PERMANENT")
+            == "test_map@PERMANENT"
+        )
+        assert GrassInterface.get_id_from_name("") == "@PERMANENT"
         with pytest.raises(TypeError):
-            GrassInterface.format_id(False)
-            GrassInterface.format_id(12.4)
-            GrassInterface.format_id(4)
+            GrassInterface.get_id_from_name(False)
+            GrassInterface.get_id_from_name(12.4)
+            GrassInterface.get_id_from_name(4)
+
+    def test_get_name_from_id(grass_session_fixture):
+        assert GrassInterface.get_name_from_id("test_map") == "test_map"
+        assert GrassInterface.get_name_from_id("test_map@PERMANENT") == "test_map"
+        assert GrassInterface.get_name_from_id("@PERMANENT") == ""
+        assert GrassInterface.get_name_from_id("") == ""
+        with pytest.raises(TypeError):
+            GrassInterface.get_name_from_id(False)
+            GrassInterface.get_name_from_id(2.4)
+            GrassInterface.get_name_from_id(4)
 
     def test_name_is_stds(grass_session_fixture):
         assert GrassInterface.name_is_stds(ACTUAL_STRDS) is True

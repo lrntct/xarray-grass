@@ -5,6 +5,9 @@ from tempfile import TemporaryDirectory
 
 import requests
 import pytest
+import grass_session
+import grass.script as gscript
+
 
 from xarray_grass import GrassConfig
 
@@ -74,3 +77,15 @@ def temp_gisdb(test_data_path: Path) -> GrassConfig:
         grassbin=None,
     )
     tmp_dir.cleanup()
+
+
+@pytest.fixture(scope="class")
+def grass_session_fixture(temp_gisdb: GrassConfig):
+    """Initialize a GRASS session for tests."""
+    with grass_session.Session(
+        gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
+    ) as session:
+        # add the mapset to the session
+        gscript.run_command("g.mapsets", mapset="modis_lst")
+        yield session
+        session.close()
