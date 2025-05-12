@@ -65,6 +65,14 @@ class GrassInterface(object):
         self.region = Region()
         self.xr = self.region.cols
         self.yr = self.region.rows
+        self.dx = self.region.ewres
+        self.dy = self.region.nsres
+        self.reg_bbox = {
+            "e": self.region.east,
+            "w": self.region.west,
+            "n": self.region.north,
+            "s": self.region.south,
+        }
 
     @staticmethod
     def format_id(name: str) -> str:
@@ -92,6 +100,10 @@ class GrassInterface(object):
         """
         return bool(gscript.find_file(name=map_id, element="cell").get("file"))
 
+    @staticmethod
+    def get_proj_as_dict() -> dict[str, str]:
+        return gscript.parse_command("g.proj", flags="g")
+
     def grass_dtype(self, dtype: str) -> str:
         if dtype in self.dtype_conv["DCELL"]:
             mtype = "DCELL"
@@ -103,11 +115,13 @@ class GrassInterface(object):
             raise ValueError("datatype incompatible with GRASS!")
         return mtype
 
-    def has_mask(self) -> bool:
+    @staticmethod
+    def has_mask() -> bool:
         """Return True if the mapset has a mask, False otherwise."""
         return bool(gscript.read_command("g.list", type="raster", pattern="MASK"))
 
-    def list_strds(self) -> list[tuple[str, str, str]]:
+    @staticmethod
+    def list_strds() -> list[tuple[str, str, str]]:
         return tgis.tlist("strds")
 
     def list_maps_in_strds(self, strds_name: str) -> list[MapData]:
@@ -123,7 +137,8 @@ class GrassInterface(object):
             raise RuntimeError(err_msg.format(strds_name, str_lst))
         return [self.MapData(*i) for i in maplist]
 
-    def read_raster_map(self, rast_name: str) -> np.ndarray:
+    @staticmethod
+    def read_raster_map(rast_name: str) -> np.ndarray:
         """Read a GRASS raster and return a numpy array"""
         with graster.RasterRow(rast_name, mode="r") as rast:
             array = np.array(rast)

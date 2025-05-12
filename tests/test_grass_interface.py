@@ -54,43 +54,55 @@ class TestGrassInterface:
             grass_i.grass_dtype("float")
 
     def test_format_id(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        assert grass_i.format_id("test_map") == "test_map@PERMANENT"
-        assert grass_i.format_id("test_map@PERMANENT") == "test_map@PERMANENT"
-        assert grass_i.format_id("") == "@PERMANENT"
+        assert GrassInterface.format_id("test_map") == "test_map@PERMANENT"
+        assert GrassInterface.format_id("test_map@PERMANENT") == "test_map@PERMANENT"
+        assert GrassInterface.format_id("") == "@PERMANENT"
         with pytest.raises(TypeError):
-            grass_i.format_id(False)
-            grass_i.format_id(12.4)
-            grass_i.format_id(4)
+            GrassInterface.format_id(False)
+            GrassInterface.format_id(12.4)
+            GrassInterface.format_id(4)
 
     def test_name_is_stds(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        assert grass_i.name_is_stds(ACTUAL_STRDS) is True
-        assert grass_i.name_is_stds(ACTUAL_RASTER_MAP) is False
-        assert grass_i.name_is_stds("not_a_real_strds@PERMANENT") is False
+        assert GrassInterface.name_is_stds(ACTUAL_STRDS) is True
+        assert GrassInterface.name_is_stds(ACTUAL_RASTER_MAP) is False
+        assert GrassInterface.name_is_stds("not_a_real_strds@PERMANENT") is False
         with pytest.raises(gexceptions.FatalError):
-            grass_i.name_is_stds("not_a_real_strds@NOT_A_MAPSET")
-            grass_i.name_is_stds("not_a_real_strds")
+            GrassInterface.name_is_stds("not_a_real_strds@NOT_A_MAPSET")
+            GrassInterface.name_is_stds("not_a_real_strds")
 
     def test_name_is_map(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        assert grass_i.name_is_map(ACTUAL_RASTER_MAP) is True
-        assert grass_i.name_is_map(ACTUAL_STRDS) is False
-        assert grass_i.name_is_map("not_a_real_map@PERMANENT") is False
-        assert grass_i.name_is_map("not_a_real_map@NOT_A_MAPSET") is False
-        assert grass_i.name_is_map("not_a_real_map") is False
+        assert GrassInterface.name_is_map(ACTUAL_RASTER_MAP) is True
+        assert GrassInterface.name_is_map(ACTUAL_STRDS) is False
+        assert GrassInterface.name_is_map("not_a_real_map@PERMANENT") is False
+        assert GrassInterface.name_is_map("not_a_real_map@NOT_A_MAPSET") is False
+        assert GrassInterface.name_is_map("not_a_real_map") is False
+
+    def test_get_proj_as_dict(grass_session_fixture):
+        proj_dict = GrassInterface.get_proj_as_dict()
+        assert proj_dict["name"] == "Lambert Conformal Conic"
+        assert proj_dict["proj"] == "lcc"
+        assert proj_dict["datum"] == "nad83"
+        assert proj_dict["es"] == "0.006694380022900787"
+        assert proj_dict["lat_1"] == "36.16666666666666"
+        assert proj_dict["lat_2"] == "34.33333333333334"
+        assert proj_dict["lat_0"] == "33.75"
+        assert proj_dict["lon_0"] == "-79"
+        assert proj_dict["x_0"] == "609601.22"
+        assert proj_dict["no_defs"] == "defined"
+        assert proj_dict["srid"] == "EPSG:3358"
+        assert proj_dict["unit"] == "Meter"
+        assert proj_dict["units"] == "Meters"
+        assert proj_dict["meters"] == "1"
 
     def test_has_mask(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        assert grass_i.has_mask() is False
+        assert GrassInterface.has_mask() is False
         gscript.run_command("r.mask", quiet=True, raster=ACTUAL_RASTER_MAP)
-        assert grass_i.has_mask() is True
+        assert GrassInterface.has_mask() is True
         gscript.run_command("r.mask", flags="r")
-        assert grass_i.has_mask() is False
+        assert GrassInterface.has_mask() is False
 
     def test_list_strds(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        strds_list = grass_i.list_strds()
+        strds_list = GrassInterface.list_strds()
         assert strds_list == [ACTUAL_STRDS]
 
     def test_list_maps_in_strds(grass_session_fixture):
@@ -99,8 +111,7 @@ class TestGrassInterface:
         assert len(map_list) == 24
 
     def test_read_raster_map(grass_session_fixture):
-        grass_i = GrassInterface(region_id=None)
-        np_map = grass_i.read_raster_map(ACTUAL_RASTER_MAP)
+        np_map = GrassInterface.read_raster_map(ACTUAL_RASTER_MAP)
         assert np_map is not None
         assert np_map.shape == (1350, 1500)
         assert np_map.dtype == "float32"
