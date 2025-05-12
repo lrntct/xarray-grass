@@ -53,6 +53,9 @@ class TestGrassInterface:
             grass_i.grass_dtype("int")
             grass_i.grass_dtype("float")
 
+    def test_is_latlon(grass_session_fixture):
+        assert GrassInterface.is_latlon() is False
+
     def test_format_id(grass_session_fixture):
         assert GrassInterface.format_id("test_map") == "test_map@PERMANENT"
         assert GrassInterface.format_id("test_map@PERMANENT") == "test_map@PERMANENT"

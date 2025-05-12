@@ -75,6 +75,10 @@ class GrassInterface(object):
         }
 
     @staticmethod
+    def is_latlon():
+        return gscript.locn_is_latlong()
+
+    @staticmethod
     def format_id(name: str) -> str:
         """Take a map or stds name as input
         and return a fully qualified name, i.e. including mapset
