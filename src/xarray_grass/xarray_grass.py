@@ -45,9 +45,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         )
 
     def guess_can_open(self, filename_or_obj) -> bool:
-        """infer if the path is a GRASS mapset by searching for WIND and VAR files
-        in the directory.
-        """
+        """infer if the path is a GRASS mapset."""
         return is_grass_mapset(filename_or_obj)
 
 
@@ -68,7 +66,7 @@ def is_grass_mapset(filename_or_obj) -> bool:
 
 
 def open_grass_mapset(
-    filename_or_obj, grass_object_name, drop_variables=None
+    filename_or_obj: str | Path, grass_object_name: str, drop_variables=None
 ) -> xr.Dataset:
     """
     Open a GRASS mapset and return an xarray dataset.
@@ -99,6 +97,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface):
     TODO: add unit, description etc. as attributes
     TODO: lazy loading
     TODO: Make sure the coordinate represents what it should
+    TODO: handle start and end_time
     """
     lim_e = grass_i.reg_bbox["e"]
     lim_w = grass_i.reg_bbox["w"]
@@ -106,23 +105,31 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface):
     lim_s = grass_i.reg_bbox["s"]
     dx = grass_i.dx
     dy = grass_i.dy
-    x_coords = np.arange(start=lim_w, stop=lim_e, step=dx, dtype=np.float32)
-    y_coords = np.arange(start=lim_s, stop=lim_n, step=dy, dtype=np.float32)
+    # GRASS limits are at the edge of the region.
+    # In the exported DataArray, coordinates are at the center of the cell
+    # Stop not changed to include it in the range
+    start_w = lim_w + dx / 2
+    stop_e = lim_e
+    start_s = lim_s + dy / 2
+    stop_n = lim_n
+    x_coords = np.arange(start=start_w, stop=stop_e, step=dx, dtype=np.float32)
+    y_coords = np.arange(start=start_s, stop=stop_n, step=dy, dtype=np.float32)
     is_latlon = grass_i.is_latlon()
     if is_latlon:
-        dims = ["time", "latitude", "longitude"]
+        dims = ["start_time", "latitude", "longitude"]
         coordinates = dict.fromkeys(dims)
         coordinates["longitude"] = x_coords
         coordinates["latitude"] = y_coords
     else:
-        dims = ["time", "y", "x"]
+        dims = ["start_time", "y", "x"]
         coordinates = dict.fromkeys(dims)
         coordinates["x"] = x_coords
         coordinates["y"] = y_coords
     map_list = grass_i.list_maps_in_strds(strds_name)
     array_list = []
     for map_data in map_list:
-        coordinates["time"] = [map_data.start_time]
+        coordinates["start_time"] = [map_data.start_time]
+        coordinates["end_time"] = ("start_time", [map_data.end_time])
         ndarray = grass_i.read_raster_map(map_data.id)
         # add time dimension at the beginning
         ndarray = np.expand_dims(ndarray, axis=0)
@@ -133,7 +140,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface):
             name=grass_i.get_name_from_id(strds_name),
         )
         array_list.append(data_array)
-    return xr.concat(array_list, dim="time")
+    return xr.concat(array_list, dim="start_time")
 
 
 class GrassBackendArray(BackendArray):
