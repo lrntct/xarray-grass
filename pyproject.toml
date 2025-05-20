@@ -1,12 +1,16 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "xarray-grass"
-version = "0.1.0"
-description = "An xarray backend for GRASS raster maps and space time raster datasets"
+dynamic = ["version"]
+description = "An xarray backend for GRASS raster data."
 authors = [
     { name = "Laurent Courty", email = "lrntct@gmail.com" }
 ]
 readme = "README.md"
-license = {text = "GPL-2.0-or-later"}
+license ="GPL-2.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
     "grass-session>=0.5",
@@ -35,3 +39,6 @@ my_engine = "xarray_grass.xarray_grass:GrassBackendEntrypoint"
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 addopts = ["--import-mode=importlib"]
+
+[tool.setuptools.dynamic]
+version = {attr = "xarray_grass.__version__"}
