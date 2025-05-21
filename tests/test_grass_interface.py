@@ -68,20 +68,22 @@ class TestGrassInterface:
             GrassInterface.get_name_from_id(2.4)
             GrassInterface.get_name_from_id(4)
 
-    def test_name_is_stds(grass_session_fixture):
-        assert GrassInterface.name_is_stds(ACTUAL_STRDS) is True
-        assert GrassInterface.name_is_stds(ACTUAL_RASTER_MAP) is False
-        assert GrassInterface.name_is_stds("not_a_real_strds@PERMANENT") is False
+    def test_name_is_stdrs(grass_session_fixture):
+        grass_i = GrassInterface()
+        assert grass_i.name_is_strds(ACTUAL_STRDS) is True
+        assert grass_i.name_is_strds(ACTUAL_RASTER_MAP) is False
+        assert grass_i.name_is_strds("not_a_real_strds@PERMANENT") is False
         with pytest.raises(gexceptions.FatalError):
-            GrassInterface.name_is_stds("not_a_real_strds@NOT_A_MAPSET")
-            GrassInterface.name_is_stds("not_a_real_strds")
+            grass_i.name_is_strds("not_a_real_strds@NOT_A_MAPSET")
+            grass_i.name_is_strds("not_a_real_strds")
 
-    def test_name_is_map(grass_session_fixture):
-        assert GrassInterface.name_is_map(ACTUAL_RASTER_MAP) is True
-        assert GrassInterface.name_is_map(ACTUAL_STRDS) is False
-        assert GrassInterface.name_is_map("not_a_real_map@PERMANENT") is False
-        assert GrassInterface.name_is_map("not_a_real_map@NOT_A_MAPSET") is False
-        assert GrassInterface.name_is_map("not_a_real_map") is False
+    def test_name_is_raster(grass_session_fixture):
+        grass_i = GrassInterface()
+        assert grass_i.name_is_raster(ACTUAL_RASTER_MAP) is True
+        assert grass_i.name_is_raster(ACTUAL_STRDS) is False
+        assert grass_i.name_is_raster("not_a_real_map@PERMANENT") is False
+        assert grass_i.name_is_raster("not_a_real_map@NOT_A_MAPSET") is False
+        assert grass_i.name_is_raster("not_a_real_map") is False
 
     def test_get_proj_as_dict(grass_session_fixture):
         proj_dict = GrassInterface.get_proj_as_dict()

@@ -27,6 +27,7 @@ def test_load_bad_name(grass_session_fixture, temp_gisdb) -> None:
         Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
     )
     with pytest.raises(ValueError):
+        xr.open_dataset(mapset_path, grass_object_name="not_a_real_map@PERMANENT")
         xr.open_dataset(mapset_path, grass_object_name="not_a_real_map")
         # /!\ remove when implementing raster loading
         xr.open_dataset(mapset_path, grass_object_name=ACTUAL_RASTER_MAP)

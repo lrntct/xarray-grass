@@ -85,26 +85,28 @@ def open_grass_mapset(
         gisdb=str(gisdb), location=str(project), mapset=str(mapset)
     ):
         grass_i = GrassInterface()
-        if grass_object_name not in grass_i.list_strds():
-            raise ValueError(f"{grass_object_name} not an STRDS")
-        else:
+        if grass_i.name_is_strds(grass_object_name):
             data_array = open_grass_strds(grass_object_name, grass_i)
+        elif grass_i.name_is_raster(grass_object_name):
+            data_array = open_grass_raster(grass_object_name)
+        elif grass_i.name_is_raster3d(grass_object_name):
+            data_array = open_grass_raster3d(grass_object_name)
+        else:
+            raise ValueError(f"{grass_object_name} not an STRDS")
     return data_array.to_dataset()
 
 
-def open_grass_strds(strds_name: str, grass_i: GrassInterface):
-    """must be called from within a grass session
-    TODO: add unit, description etc. as attributes
-    TODO: lazy loading
-    TODO: Make sure the coordinate represents what it should
-    TODO: handle start and end_time
-    """
+def get_coordinates(grass_i: GrassInterface) -> dict:
+    """return xarray coordinates from GRASS region."""
     lim_e = grass_i.reg_bbox["e"]
     lim_w = grass_i.reg_bbox["w"]
     lim_n = grass_i.reg_bbox["n"]
     lim_s = grass_i.reg_bbox["s"]
+    lim_t = grass_i.reg_bbox["t"]
+    lim_b = grass_i.reg_bbox["b"]
     dx = grass_i.dx
     dy = grass_i.dy
+    dz = grass_i.dz
     # GRASS limits are at the edge of the region.
     # In the exported DataArray, coordinates are at the center of the cell
     # Stop not changed to include it in the range
@@ -112,8 +114,31 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface):
     stop_e = lim_e
     start_s = lim_s + dy / 2
     stop_n = lim_n
+    start_b = lim_b + dz / 2
+    stop_t = lim_t
     x_coords = np.arange(start=start_w, stop=stop_e, step=dx, dtype=np.float32)
     y_coords = np.arange(start=start_s, stop=stop_n, step=dy, dtype=np.float32)
+    z_coords = np.arange(start=start_b, stop=stop_t, step=dz, dtype=np.float32)
+    return {"x": x_coords, "y": y_coords, "z": z_coords}
+
+
+def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
+    """Open a single raster map"""
+    pass
+
+
+def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
+    """Open a single 3D raster map"""
+    pass
+
+
+def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
+    """must be called from within a grass session
+    TODO: add unit, description etc. as attributes
+    TODO: lazy loading
+    TODO: Make sure the coordinate represents what it should
+    """
+    x_coords, y_coords, _ = get_coordinates(grass_i).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["start_time", "latitude", "longitude"]
@@ -144,7 +169,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface):
 
 
 class GrassBackendArray(BackendArray):
-    """To implement lazy loading"""
+    """For lazy loading"""
 
     def __init__(
         self,

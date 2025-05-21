@@ -85,11 +85,14 @@ class GrassInterface(object):
         self.yr = self.region.rows
         self.dx = self.region.ewres
         self.dy = self.region.nsres
+        self.dz = self.region.tbres
         self.reg_bbox = {
             "e": self.region.east,
             "w": self.region.west,
             "n": self.region.north,
             "s": self.region.south,
+            "t": self.region.top,
+            "b": self.region.bottom,
         }
 
     @staticmethod
@@ -118,21 +121,26 @@ class GrassInterface(object):
         else:
             return input_string
 
-    @staticmethod
-    def name_is_stds(name: str) -> bool:
+    def name_is_strds(self, name: str) -> bool:
         """return True if the name given as input is a registered strds
         False if not
         """
         # make sure temporal module is initialized
         tgis.init()
-        return bool(tgis.SpaceTimeRasterDataset(name).is_in_db())
+        strds_id = self.get_id_from_name(name)
+        return bool(tgis.SpaceTimeRasterDataset(strds_id).is_in_db())
 
-    @staticmethod
-    def name_is_map(map_id: str) -> bool:
+    def name_is_raster(self, raster_name: str) -> bool:
         """return True if the given name is a map in the grass database
         False if not
         """
-        return bool(gscript.find_file(name=map_id, element="cell").get("file"))
+        map_id = self.get_id_from_name(raster_name)
+        return bool(gscript.find_file(name=map_id, element="raster").get("file"))
+
+    @staticmethod
+    def name_is_raster3d(map_id: str) -> bool:
+        """return True if the given name is a 3D raster in the grass database."""
+        return bool(gscript.find_file(name=map_id, element="raster_3d").get("file"))
 
     @staticmethod
     def get_proj_as_dict() -> dict[str, str]:
@@ -193,7 +201,7 @@ class GrassInterface(object):
             columns=",".join(strds_cols), order="start_time"
         )
         # check if every map exist
-        maps_not_found = [m[0] for m in maplist if not self.name_is_map(m[0])]
+        maps_not_found = [m[0] for m in maplist if not self.name_is_raster(m[0])]
         if any(maps_not_found):
             err_msg = "STRDS <{}>: Can't find following maps: {}"
             str_lst = ",".join(maps_not_found)

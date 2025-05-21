@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.entry-points."xarray.backends"]
-my_engine = "xarray_grass.xarray_grass:GrassBackendEntrypoint"
+xarray_grass = "xarray_grass.xarray_grass:GrassBackendEntrypoint"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
