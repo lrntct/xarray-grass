@@ -2,14 +2,18 @@ import hashlib
 from pathlib import Path
 import zipfile
 from tempfile import TemporaryDirectory
+from datetime import datetime, timedelta
+import os
 
 import requests
 import pytest
 import grass_session
-import grass.script as gscript
+import grass.script as gs
+import grass.temporal as tgis
 
 
 from xarray_grass import GrassConfig
+from xarray_grass import GrassInterface
 
 NC_BASIC_URL = (
     "https://grass.osgeo.org/sampledata/north_carolina/nc_basic_spm_grass7.zip"
@@ -58,7 +62,7 @@ def test_data_path() -> Path:
 
 @pytest.fixture(scope="session")
 def temp_gisdb(test_data_path: Path) -> GrassConfig:
-    """create a temporary GISDB"""
+    """create a temporary GISDB with downloaded data."""
     tmp_dir = TemporaryDirectory(prefix="xarray_grass_test_")
     grassdata = Path(tmp_dir.name)
     # NC sample data
@@ -79,13 +83,107 @@ def temp_gisdb(test_data_path: Path) -> GrassConfig:
     tmp_dir.cleanup()
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="session")
 def grass_session_fixture(temp_gisdb: GrassConfig):
     """Initialize a GRASS session for tests."""
-    with grass_session.Session(
-        gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
-    ) as session:
-        # add the mapset to the session
-        gscript.run_command("g.mapsets", mapset="modis_lst")
-        yield session
-        session.close()
+    try:
+        with grass_session.Session(
+            gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
+        ) as session:
+            # add the mapset to the session
+            gs.run_command("g.mapsets", mapset="modis_lst")
+            
+            # Set smaller resolution for faster tests, and info for 3D rasters
+            gs.run_command("g.region", b=0, t=100, tbres=10, rows=150, cols=135)
+            
+            # Add relative and absolute str3ds
+            gen_str3ds(temporal_type="relative")
+            gen_str3ds(temporal_type="absolute")
+            
+            yield session
+            
+            try:
+                gisenv_vars_before_close = gs.gisenv()
+            except Exception as e_gisenv_pre_close:
+                # logger.warning(f"grass_session_fixture: Could not get gs.gisenv() before session.close(): {e_gisenv_pre_close}")
+                pass # Silently ignore if gs.gisenv fails here
+
+            session.close()
+
+            # Attempt to log with gs.gisenv() after close - this should ideally fail or show cleared vars
+            try:
+                gisenv_vars_after_close = gs.gisenv()
+            except Exception as e_gisenv_post_close:
+                # logger.info(f"grass_session_fixture: gs.gisenv() after session.close() expectedly failed or showed empty: {e_gisenv_post_close}")
+                pass # Silently ignore
+
+    except Exception as e:
+        # logger.error(f"grass_session_fixture: EXCEPTION during setup/teardown: {e}", exc_info=True)
+        raise
+    finally:
+        # Explicitly clean up environment variables that GRASS might set/leave
+        vars_to_clean = ['GISRC', 'GISDBASE', 'LOCATION_NAME', 'MAPSET', 'GRASS_PAGER', 'GRASS_GUI']
+        for var in vars_to_clean:
+            if var in os.environ:
+                del os.environ[var]
+
+
+def gen_str3ds(
+    temporal_type: str = "relative", str3ds_length: int = 3
+) -> tgis.Raster3DDataset:
+    """Generate an synthetic str3ds."""
+    grass_i = GrassInterface()
+    if temporal_type == "relative":
+        time_unit = "months"
+        str3ds_times = [i + 1 for i in range(str3ds_length)]
+    elif temporal_type == "absolute":
+        time_unit = ""
+        base = datetime(year=2000, month=1, day=1)
+        str3ds_times = [base - timedelta(days=x * 30) for x in range(str3ds_length)]
+    else:
+        raise ValueError(f"Unknown temporal type: {temporal_type}")
+    # Create the str3ds
+    stds_id = grass_i.get_id_from_name(f"test_str3ds_{temporal_type}")
+    stds = tgis.open_new_stds(
+        name=stds_id,
+        type="str3ds",
+        temporaltype=temporal_type,
+        title="",
+        descr="",
+        semantic="mean",
+    )
+    # create MapDataset objects list
+    str3ds_length = 10
+    map_dts_lst = []
+    for i, map_time in enumerate(str3ds_times):
+        # Generate random map. Given seed for reproducibility
+        map_name = f"test3d_{map_time}"
+        if temporal_type == "absolute":
+            formatted_date = map_time.strftime("%Y%m%d")
+            map_name = f"test3d_{formatted_date}"
+        gs.raster3d.mapcalc3d(exp=f"{map_name}=rand(10,100)", seed=i)
+        # create MapDataset
+        map_id = grass_i.get_id_from_name(map_name)
+        map_dts = tgis.Raster3DDataset(map_id)
+        # load spatial data from map
+        map_dts.load()
+        # set time
+        if temporal_type == "relative":
+            map_dts.set_relative_time(
+                start_time=map_time, end_time=None, unit=time_unit
+            )
+        elif temporal_type == "absolute":
+            map_dts.set_absolute_time(start_time=map_time)
+        else:
+            assert False, "unknown temporal type!"
+        # populate the list
+        map_dts_lst.append(map_dts)
+    # Finally register the maps
+    tgis.register.register_map_object_list(
+        type="raster3d",
+        map_list=map_dts_lst,
+        output_stds=stds,
+        delete_empty=False,
+        unit=time_unit,
+    )
+    return stds

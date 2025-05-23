@@ -9,14 +9,14 @@ import numpy as np
 
 # Needed to be able to import grass modules
 import grass_session  # noqa: F401
-import grass.script as gscript
+import grass.script as gs
 import grass.pygrass.utils as gutils
 from grass.pygrass.gis.region import Region
 from grass.pygrass import raster as graster
 import grass.temporal as tgis
 
 
-gscript.core.set_raise_on_error(True)
+gs.core.set_raise_on_error(True)
 
 
 @dataclass
@@ -78,11 +78,11 @@ class GrassInterface(object):
         # Set region
         self.region_id = region_id
         if self.region_id:
-            gscript.use_temp_region()
-            gscript.run_command("g.region", region=region_id)
+            gs.use_temp_region()
+            gs.run_command("g.region", region=region_id)
         self.region = Region()
-        self.xr = self.region.cols
-        self.yr = self.region.rows
+        self.cols = self.region.cols
+        self.rows = self.region.rows
         self.dx = self.region.ewres
         self.dy = self.region.nsres
         self.dz = self.region.tbres
@@ -97,7 +97,7 @@ class GrassInterface(object):
 
     @staticmethod
     def is_latlon():
-        return gscript.locn_is_latlong()
+        return gs.locn_is_latlong()
 
     @staticmethod
     def get_id_from_name(name: str) -> str:
@@ -130,21 +130,30 @@ class GrassInterface(object):
         strds_id = self.get_id_from_name(name)
         return bool(tgis.SpaceTimeRasterDataset(strds_id).is_in_db())
 
+    def name_is_str3ds(self, name: str) -> bool:
+        """return True if the name given as input is a registered str3ds
+        False if not
+        """
+        # make sure temporal module is initialized
+        tgis.init()
+        str3ds_id = self.get_id_from_name(name)
+        return bool(tgis.SpaceTimeRaster3DDataset(str3ds_id).is_in_db())
+
     def name_is_raster(self, raster_name: str) -> bool:
         """return True if the given name is a map in the grass database
         False if not
         """
         map_id = self.get_id_from_name(raster_name)
-        return bool(gscript.find_file(name=map_id, element="raster").get("file"))
+        return bool(gs.find_file(name=map_id, element="raster").get("file"))
 
-    @staticmethod
-    def name_is_raster3d(map_id: str) -> bool:
+    def name_is_raster3d(self, raster3d_name: str) -> bool:
         """return True if the given name is a 3D raster in the grass database."""
-        return bool(gscript.find_file(name=map_id, element="raster_3d").get("file"))
+        map_id = self.get_id_from_name(raster3d_name)
+        return bool(gs.find_file(name=map_id, element="raster_3d").get("file"))
 
     @staticmethod
-    def get_proj_as_dict() -> dict[str, str]:
-        return gscript.parse_command("g.proj", flags="g")
+    def get_proj_str() -> str:
+        return gs.read_command("g.proj", flags="jf")
 
     def grass_dtype(self, dtype: str) -> str:
         if dtype in self.dtype_conv["DCELL"]:
@@ -160,11 +169,39 @@ class GrassInterface(object):
     @staticmethod
     def has_mask() -> bool:
         """Return True if the mapset has a mask, False otherwise."""
-        return bool(gscript.read_command("g.list", type="raster", pattern="MASK"))
+        return bool(gs.read_command("g.list", type="raster", pattern="MASK"))
 
     @staticmethod
-    def list_strds() -> list[str]:
-        return tgis.tlist("strds")
+    def list_strds(mapset: str = None) -> list[str]:
+        if mapset:
+            return tgis.tlist_grouped("strds")[mapset]
+        else:
+            return tgis.tlist("strds")
+
+    @staticmethod
+    def list_str3ds(mapset: str = None) -> list[str]:
+        if mapset:
+            return tgis.tlist_grouped("str3ds")[mapset]
+        else:
+            return tgis.tlist("str3ds")
+
+    @staticmethod
+    def list_raster(mapset: str = None) -> list[str]:
+        """List raster maps in the given mapset"""
+        return gs.list_strings("raster", mapset=mapset)
+
+    @staticmethod
+    def list_raster3d(mapset: str = None) -> list[str]:
+        return gs.list_strings("raster_3d", mapset=mapset)
+
+    def list_grass_objects(self, mapset: str = None) -> dict[list[str]]:
+        """Return all GRASS objects in a given mapset."""
+        objects_dict = {}
+        objects_dict["raster"] = self.list_raster(mapset)
+        objects_dict["raster3d"] = self.list_raster3d(mapset)
+        objects_dict["strds"] = self.list_strds(mapset)
+        objects_dict["str3ds"] = self.list_str3ds(mapset)
+        return objects_dict
 
     def get_strds_infos(self, strds_name) -> STRDSInfos:
         strds_id = self.get_id_from_name(strds_name)
@@ -217,6 +254,12 @@ class GrassInterface(object):
 
     def write_raster_map(self, arr: np.ndarray, rast_name: str) -> Self:
         mtype: str = self.grass_dtype(arr.dtype)
+        region_shape = (self.rows, self.cols)
+        if region_shape != arr.shape:
+            raise ValueError(
+                f"Cannot write an array of shape {arr.shape} into "
+                f"a GRASS region of size {region_shape}"
+            )
         with graster.RasterRow(
             rast_name, mode="w", mtype=mtype, overwrite=self.overwrite
         ) as newraster:

@@ -14,6 +14,7 @@ GNU General Public License for more details.
 """
 
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
 from xarray.backends import BackendEntrypoint
@@ -27,29 +28,67 @@ class GrassBackendEntrypoint(BackendEntrypoint):
     """
     Backend entry point for GRASS mapset."""
 
-    open_dataset_parameters = ["filename_or_obj", "grass_object_name", "drop_variables"]
-    description = "Open GRASS mapset in Xarray"
+    open_dataset_parameters = [
+        "filename_or_obj",
+        "raster",
+        "raster3d",
+        "strds",
+        "str3ds",
+        "drop_variables",
+    ]
+    description = "Open a GRASS mapset in Xarray"
     url = "https://link_to/your_backend/documentation"  # TODO
 
     def open_dataset(
         self,
         filename_or_obj,
         *,
-        grass_object_name,
-        drop_variables=None,
+        raster: str | Iterable[str] = [],
+        raster3d: str | Iterable[str] = [],
+        strds: str | Iterable[str] = [],
+        str3ds: str | Iterable[str] = [],
+        drop_variables: Iterable[str],
         # other backend specific keyword arguments
         # `chunks` and `cache` DO NOT go here, they are handled by xarray
     ) -> xr.Dataset:
-        return open_grass_mapset(
-            filename_or_obj, grass_object_name, drop_variables=drop_variables
+        """Open GRASS project or mapset as an xarray.Dataset.
+        TODO: add support for whole project.
+        """
+        open_func_params = dict(
+            raster_list=raster,
+            raster3d_list=raster3d,
+            strds_list=strds,
+            str3ds_list=str3ds,
         )
+        if not any([raster, raster3d, strds, str3ds]):
+            # list all the maps in the mapset / project
+            pass
+        else:
+            # Format str inputs into list
+            for object_type, elem in open_func_params.items():
+                if isinstance(elem, str):
+                    open_func_params[object_type] = [elem]
+                elif elem is None:
+                    open_func_params[object_type] = []
+                else:
+                    open_func_params[object_type] = list(elem)
+        # drop requested variables
+        if drop_variables is not None:
+            for object_type, grass_obj_name_list in open_func_params.items():
+                open_func_params[object_type] = [
+                    name for name in grass_obj_name_list if name not in drop_variables
+                ]
+
+        return open_grass_maps(filename_or_obj, **open_func_params)
 
     def guess_can_open(self, filename_or_obj) -> bool:
         """infer if the path is a GRASS mapset."""
-        return is_grass_mapset(filename_or_obj)
+        return dir_is_grass_mapset(filename_or_obj) or dir_is_grass_project(
+            filename_or_obj
+        )
 
 
-def is_grass_mapset(filename_or_obj) -> bool:
+def dir_is_grass_mapset(filename_or_obj: str | Path) -> bool:
     """
     Check if the given path is a GRASS mapset.
     """
@@ -65,18 +104,34 @@ def is_grass_mapset(filename_or_obj) -> bool:
     return False
 
 
-def open_grass_mapset(
-    filename_or_obj: str | Path, grass_object_name: str, drop_variables=None
+def dir_is_grass_project(filename_or_obj: str | Path) -> bool:
+    """Return True if a subdir named PERMANENT is present."""
+    try:
+        dirpath = Path(filename_or_obj)
+    except TypeError:
+        return False
+    if dirpath.is_dir():
+        return (dirpath / Path("PERMANENT")).is_dir()
+    else:
+        return False
+
+
+def open_grass_maps(
+    filename_or_obj: str | Path,
+    raster_list: Iterable[str] = None,
+    raster3d_list: Iterable[str] = None,
+    strds_list: Iterable[str] = None,
+    str3ds_list: Iterable[str] = None,
+    raise_on_not_found: bool = True,
 ) -> xr.Dataset:
     """
     Open a GRASS mapset and return an xarray dataset.
     TODO: add support for single map
     TODO: add support for whole mapset
     TODO: add support for 3D STRDS
-    TODO: add proj4 string as an attribute
     """
     dirpath = Path(filename_or_obj)
-    if not is_grass_mapset(dirpath):
+    if not dir_is_grass_mapset(dirpath):
         raise ValueError(f"{filename_or_obj} is not a GRASS mapset")
     mapset = dirpath.stem
     project = dirpath.parent.stem
@@ -84,16 +139,41 @@ def open_grass_mapset(
     with grass_session.Session(
         gisdb=str(gisdb), location=str(project), mapset=str(mapset)
     ):
-        grass_i = GrassInterface()
-        if grass_i.name_is_strds(grass_object_name):
-            data_array = open_grass_strds(grass_object_name, grass_i)
-        elif grass_i.name_is_raster(grass_object_name):
-            data_array = open_grass_raster(grass_object_name)
-        elif grass_i.name_is_raster3d(grass_object_name):
-            data_array = open_grass_raster3d(grass_object_name)
-        else:
-            raise ValueError(f"{grass_object_name} not an STRDS")
-    return data_array.to_dataset()
+        gi = GrassInterface()
+        # Open all given maps and identify non-existent data
+        # Need refactoring
+        not_found = {k: [] for k in ["raster", "raster3d", "strds", "str3ds"]}
+        data_array_list = []
+        for raster_map_name in raster_list:
+            if not gi.name_is_raster(raster_map_name):
+                not_found["raster"].append(raster_map_name)
+                continue
+            data_array = open_grass_raster(raster_map_name, gi)
+            data_array_list.append(data_array)
+        for raster3d_map_name in raster3d_list:
+            if not gi.name_is_raster3d(raster3d_map_name):
+                not_found["raster3d"].append(raster3d_map_name)
+                continue
+            data_array = open_grass_raster3d(raster3d_map_name, gi)
+            data_array_list.append(data_array)
+        for strds_name in strds_list:
+            if not gi.name_is_strds(strds_name):
+                not_found["strds"].append(strds_name)
+                continue
+            data_array = open_grass_strds(strds_name, gi)
+            data_array_list.append(data_array)
+        for str3ds_name in str3ds_list:
+            if not gi.name_is_str3ds(str3ds_name):
+                not_found["str3ds"].append(str3ds_name)
+                continue
+            data_array = open_grass_str3ds(str3ds_name, gi)
+            data_array_list.append(data_array)
+        if raise_on_not_found and any(not_found.values()):
+            raise ValueError(f"Objects not found: {not_found}")
+        data_array_list = [da for da in data_array_list if isinstance(da, xr.DataArray)]
+        dataset = xr.merge(data_array_list)
+        dataset.attrs["crs"] = gi.get_proj_str()
+    return dataset
 
 
 def get_coordinates(grass_i: GrassInterface) -> dict:
@@ -123,12 +203,18 @@ def get_coordinates(grass_i: GrassInterface) -> dict:
 
 
 def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
-    """Open a single raster map"""
+    """Open a single raster map."""
     pass
 
 
 def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
-    """Open a single 3D raster map"""
+    """Open a single 3D raster map."""
+    pass
+
+
+def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray:
+    """Open a series of 3D raster maps.
+    TODO: Figure out what to do when the z value of the maps is time."""
     pass
 
 
