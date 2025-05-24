@@ -38,11 +38,6 @@ def test_dir_is_grass_mapset(grass_session_fixture, temp_gisdb):
     assert not dir_is_grass_mapset([list, dict])  # Nonsensical input
 
 
-@pytest.fixture(scope="class")
-def grass_i():
-    return GrassInterface()
-
-
 @pytest.mark.usefixtures("grass_session_fixture")
 class TestXarrayGrass:
     def test_load_raster(self, grass_i, temp_gisdb) -> None:

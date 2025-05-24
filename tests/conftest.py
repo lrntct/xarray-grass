@@ -105,6 +105,11 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
         session.close()
 
 
+@pytest.fixture(scope="class")
+def grass_i():
+    return GrassInterface()
+
+
 def gen_str3ds(
     temporal_type: str = "relative", str3ds_length: int = 3
 ) -> tgis.Raster3DDataset:
