@@ -100,6 +100,15 @@ wheels = [
 ]
 
 [[package]]
+name = "grass-session"
+version = "0.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/df/e6929fc29ddaf44dd7f7638cb0e1e9df1baebd2f84dd29d0626a6ddc3ae0/grass-session-0.5.tar.gz", hash = "sha256:7155314535790145da8e2e31b0d20cd2be91477d54083a738b5c319164e7f03b", size = 10425 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/ef/20bf6c2468c57ab74506db4f24557e5a98678900426d0184ae5c63cbba55/grass_session-0.5-py2.py3-none-any.whl", hash = "sha256:ce03a53e28cc14bc7fff91482e83ed4f174a1325732c4333ed183dd15de39f8d", size = 31552 },
+]
+
+[[package]]
 name = "identify"
 version = "2.6.10"
 source = { registry = "https://pypi.org/simple" }
@@ -449,7 +458,9 @@ wheels = [
 name = "xarray-grass"
 source = { editable = "." }
 dependencies = [
+    { name = "grass-session" },
     { name = "numpy" },
+    { name = "pandas" },
     { name = "xarray" },
 ]
 
@@ -464,7 +475,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "grass-session", specifier = ">=0.5" },
     { name = "numpy", specifier = ">=2.2.5" },
+    { name = "pandas", specifier = ">=2.2.3" },
     { name = "xarray", specifier = ">=2025.4.0" },
 ]
 

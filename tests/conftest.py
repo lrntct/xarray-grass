@@ -7,6 +7,7 @@ import os
 
 import requests
 import pytest
+import grass_session
 import grass.script as gs
 import grass.temporal as tgis
 
@@ -85,24 +86,43 @@ def temp_gisdb(test_data_path: Path) -> GrassConfig:
 @pytest.fixture(scope="session")
 def grass_session_fixture(temp_gisdb: GrassConfig):
     """Initialize a GRASS session for tests."""
+    try:
+        with grass_session.Session(
+            gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
+        ) as session:
+            # add the mapset to the session
+            gs.run_command("g.mapsets", mapset="modis_lst")
+            
+            # Set smaller resolution for faster tests, and info for 3D rasters
+            gs.run_command("g.region", b=0, t=100, tbres=10, rows=150, cols=135)
+            
+            # Add relative and absolute str3ds
+            gen_str3ds(temporal_type="relative")
+            gen_str3ds(temporal_type="absolute")
+            
+            yield session
+            
+            try:
+                gisenv_vars_before_close = gs.gisenv()
+            except Exception as e_gisenv_pre_close:
+                # logger.warning(f"grass_session_fixture: Could not get gs.gisenv() before session.close(): {e_gisenv_pre_close}")
+                pass # Silently ignore if gs.gisenv fails here
 
-    with grass_session.Session(
-        gisdb=temp_gisdb.gisdb, location=temp_gisdb.project, mapset=temp_gisdb.mapset
-    ) as session:
-        # add the mapset to the session
-        gs.run_command("g.mapsets", mapset="modis_lst")
+            session.close()
 
-        # Set smaller resolution for faster tests, and info for 3D rasters
-        gs.run_command("g.region", b=0, t=100, tbres=10, rows=150, cols=135)
+            # Attempt to log with gs.gisenv() after close - this should ideally fail or show cleared vars
+            try:
+                gisenv_vars_after_close = gs.gisenv()
+            except Exception as e_gisenv_post_close:
+                # logger.info(f"grass_session_fixture: gs.gisenv() after session.close() expectedly failed or showed empty: {e_gisenv_post_close}")
+                pass # Silently ignore
 
-        # Add relative and absolute str3ds
-        gen_str3ds(temporal_type="relative")
-        gen_str3ds(temporal_type="absolute")
-
-        yield session
-        session.close()
+    except Exception as e:
+        # logger.error(f"grass_session_fixture: EXCEPTION during setup/teardown: {e}", exc_info=True)
+        raise
+    finally:
         # Explicitly clean up environment variables that GRASS might set/leave
-        vars_to_clean = ["GISRC", "GISDBASE", "LOCATION", "MAPSET"]
+        vars_to_clean = ['GISRC', 'GISDBASE', 'LOCATION_NAME', 'MAPSET', 'GRASS_PAGER', 'GRASS_GUI']
         for var in vars_to_clean:
             if var in os.environ:
                 del os.environ[var]
