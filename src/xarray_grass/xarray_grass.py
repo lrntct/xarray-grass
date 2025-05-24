@@ -20,7 +20,8 @@ import numpy as np
 from xarray.backends import BackendEntrypoint
 from xarray.backends import BackendArray
 import xarray as xr
-import grass_session
+
+from xarray_grass.grass_session import set_grass_session
 from xarray_grass.grass_interface import GrassInterface
 
 
@@ -98,20 +99,26 @@ def dir_is_grass_mapset(filename_or_obj: str | Path) -> bool:
         return False
     if dirpath.is_dir():
         wind_file = dirpath / Path("WIND")
-        var_file = dirpath / Path("VAR")
-        if wind_file.exists() and var_file.exists():
+        if wind_file.exists():
             return True
     return False
 
 
 def dir_is_grass_project(filename_or_obj: str | Path) -> bool:
-    """Return True if a subdir named PERMANENT is present."""
+    """Return True if a subdir named PERMANENT is correctly initiated."""
     try:
         dirpath = Path(filename_or_obj)
     except TypeError:
         return False
-    if dirpath.is_dir():
-        return (dirpath / Path("PERMANENT")).is_dir()
+    if not dirpath.is_dir():
+        return False
+    permanent_path = dirpath / Path("PERMANENT")
+    if permanent_path.is_dir():
+        default_wind = permanent_path / Path("DEFAULT_WIND")
+        proj_info = permanent_path / Path("PROJ_INFO")
+        proj_units = permanent_path / Path("PROJ_UNITS")
+        if all([default_wind.exists(), proj_info.exists(), proj_units.exists()]):
+            return True
     else:
         return False
 
@@ -136,9 +143,7 @@ def open_grass_maps(
     mapset = dirpath.stem
     project = dirpath.parent.stem
     gisdb = dirpath.parent.parent
-    with grass_session.Session(
-        gisdb=str(gisdb), location=str(project), mapset=str(mapset)
-    ):
+    with set_grass_session(gisdb=str(gisdb), project=str(project), mapset=str(mapset)):
         gi = GrassInterface()
         # Open all given maps and identify non-existent data
         # Need refactoring

@@ -7,8 +7,6 @@ from typing import Self
 
 import numpy as np
 
-# Needed to be able to import grass modules
-import grass_session  # noqa: F401
 import grass.script as gs
 import grass.pygrass.utils as gutils
 from grass.pygrass.gis.region import Region
@@ -69,7 +67,11 @@ class GrassInterface(object):
         ),
     }
 
-    def __init__(self, region_id: str | None = None, overwrite: bool = False):
+    def __init__(
+        self,
+        region_id: str | None = None,
+        overwrite: bool = False,
+    ):
         # Check if in a GRASS session
         if "GISRC" not in os.environ:
             raise RuntimeError("GRASS session not set.")

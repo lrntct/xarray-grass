@@ -1,3 +1,4 @@
+from xarray_grass import grass_session as grass_session
 from xarray_grass.grass_interface import GrassConfig as GrassConfig
 from xarray_grass.grass_interface import GrassInterface as GrassInterface
 from xarray_grass.xarray_grass import GrassBackendEntrypoint as GrassBackendEntrypoint

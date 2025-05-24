@@ -6,8 +6,6 @@ from unittest import mock
 import pytest
 import numpy as np
 
-# Needed to import grass modules
-import grass_session  # noqa: F401
 import grass.script as gs
 import grass.exceptions as gexceptions
 
@@ -19,28 +17,9 @@ ACTUAL_RASTER_MAP = "elevation@PERMANENT"
 
 
 def test_no_grass_session():
-    # Store original environ to verify it's not permanently changed
-    original_environ = os.environ.copy()
-    
-    # These are the critical vars GrassInterface checks or that might trigger GRASS auto-init
-    vars_to_ensure_absent_for_test = ['GISRC', 'GISDBASE', 'LOCATION_NAME', 'MAPSET']
-    
-    # Create a dictionary representing a "clean" environment for the test
-    # We start with a copy of the current os.environ and remove the GRASS vars
-    mocked_environ_values = os.environ.copy()
-    for var in vars_to_ensure_absent_for_test:
-        if var in mocked_environ_values:
-            del mocked_environ_values[var]
-
-    # Use mock.patch.dict to temporarily modify os.environ for the GrassInterface call
-    with mock.patch.dict(os.environ, mocked_environ_values, clear=True):
-        with pytest.raises(RuntimeError) as excinfo:
-            GrassInterface(region_id=None)
-        assert "GRASS session not set" in str(excinfo.value)
-    
-    # Verify that os.environ is restored to its original state after the mock
-    # This is important to ensure no side effects on other tests
-    assert os.environ == original_environ, "os.environ was not restored after mock"
+    with pytest.raises(RuntimeError) as excinfo:
+        GrassInterface(region_id=None)
+    assert "GRASS session not set" in str(excinfo.value)
 
 
 @pytest.mark.usefixtures("grass_session_fixture")
@@ -227,7 +206,5 @@ class TestGrassInterface:
         assert strds_info["end_time"].strip("'") == str(datetime(2023, 2, 1))
         # clean-up
         for map_name in ["test_temporal_map1", "test_temporal_map2"]:
-            gs.run_command(
-                    "g.remove", flags="f", type="raster", name=map_name
-                )
-        gs.run_command("t.remove",type="strds", input=stds_name, flags="f")
+            gs.run_command("g.remove", flags="f", type="raster", name=map_name)
+        gs.run_command("t.remove", type="strds", input=stds_name, flags="f")
