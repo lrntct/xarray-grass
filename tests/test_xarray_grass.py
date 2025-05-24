@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import pytest
 import xarray as xr
@@ -37,44 +38,51 @@ def test_dir_is_grass_mapset(grass_session_fixture, temp_gisdb):
     assert not dir_is_grass_mapset([list, dict])  # Nonsensical input
 
 
-def test_load_raster(grass_session_fixture):
-    pass
+@pytest.fixture(scope="class")
+def grass_i():
+    return GrassInterface()
 
 
-def test_load_raster3d(grass_session_fixture):
-    pass
+@pytest.mark.usefixtures("grass_session_fixture")
+class TestXarrayGrass:
+    def test_load_raster(self, grass_i, temp_gisdb) -> None:
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(mapset_path, raster=ACTUAL_RASTER_MAP)
+        assert isinstance(test_dataset, xr.Dataset)
+        assert len(test_dataset.dims) == 2
+        assert len(test_dataset.x) == grass_i.cols
+        assert len(test_dataset.y) == grass_i.rows
 
+    def test_load_raster3d(self, grass_i, temp_gisdb):
+        assert True
 
-def test_load_strds(grass_session_fixture, temp_gisdb) -> None:
-    grass_i = GrassInterface()
-    mapset_path = (
-        Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
-    )
-    test_dataset = xr.open_dataset(mapset_path, strds=ACTUAL_STRDS)
-    # print(test_dataset)
-    assert isinstance(test_dataset, xr.Dataset)
-    assert len(test_dataset.dims) == 3
-    assert len(test_dataset.x) == grass_i.cols
-    assert len(test_dataset.y) == grass_i.rows
+    def test_load_strds(self, grass_i, temp_gisdb) -> None:
+        mapset_path = (
+            Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(mapset_path, strds=ACTUAL_STRDS)
+        # print(test_dataset)
+        assert isinstance(test_dataset, xr.Dataset)
+        assert len(test_dataset.dims) == 3
+        assert len(test_dataset.x) == grass_i.cols
+        assert len(test_dataset.y) == grass_i.rows
 
+    def test_load_str3ds(self, grass_i, temp_gisdb) -> None:
+        pass
 
-def test_load_str3ds(grass_session_fixture):
-    pass
+    def test_load_whole_mapset(self, grass_i, temp_gisdb):
+        pass
 
+    def test_load_bad_name(self, temp_gisdb) -> None:
+        mapset_path = (
+            Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
+        )
+        with pytest.raises(ValueError):
+            xr.open_dataset(mapset_path, raster="not_a_real_map@PERMANENT")
+            xr.open_dataset(mapset_path, raster="not_a_real_map")
+            xr.open_dataset(mapset_path, str3ds=ACTUAL_RASTER_MAP)
 
-def test_load_whole_mapset(grass_session_fixture):
-    pass
-
-
-def test_load_bad_name(grass_session_fixture, temp_gisdb) -> None:
-    mapset_path = (
-        Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
-    )
-    with pytest.raises(ValueError):
-        xr.open_dataset(mapset_path, raster="not_a_real_map@PERMANENT")
-        xr.open_dataset(mapset_path, raster="not_a_real_map")
-        xr.open_dataset(mapset_path, str3ds=ACTUAL_RASTER_MAP)
-
-
-def test_drop_variables(grass_session_fixture):
-    pass
+    def test_drop_variables(self):
+        pass

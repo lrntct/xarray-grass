@@ -204,7 +204,26 @@ def get_coordinates(grass_i: GrassInterface) -> dict:
 
 def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single raster map."""
-    pass
+    x_coords, y_coords, _ = get_coordinates(grass_i).values()
+    is_latlon = grass_i.is_latlon()
+    if is_latlon:
+        dims = ["latitude", "longitude"]
+        coordinates = dict.fromkeys(dims)
+        coordinates["longitude"] = x_coords
+        coordinates["latitude"] = y_coords
+    else:
+        dims = ["y", "x"]
+        coordinates = dict.fromkeys(dims)
+        coordinates["x"] = x_coords
+        coordinates["y"] = y_coords
+    raster_array = grass_i.read_raster_map(raster_name)
+    data_array = xr.DataArray(
+        raster_array,
+        coords=coordinates,
+        dims=dims,
+        name=grass_i.get_name_from_id(raster_name),
+    )
+    return data_array
 
 
 def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataArray:

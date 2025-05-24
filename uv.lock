@@ -460,7 +460,6 @@ source = { editable = "." }
 dependencies = [
     { name = "grass-session" },
     { name = "numpy" },
-    { name = "pandas" },
     { name = "xarray" },
 ]
 
@@ -477,7 +476,6 @@ dev = [
 requires-dist = [
     { name = "grass-session", specifier = ">=0.5" },
     { name = "numpy", specifier = ">=2.2.5" },
-    { name = "pandas", specifier = ">=2.2.3" },
     { name = "xarray", specifier = ">=2025.4.0" },
 ]
 
