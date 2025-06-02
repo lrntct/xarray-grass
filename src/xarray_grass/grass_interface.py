@@ -157,7 +157,7 @@ class GrassInterface(object):
         map_id = self.get_id_from_name(raster_name)
         return bool(gs.find_file(name=map_id, element="raster").get("file"))
 
-    def name_is_raster3d(self, raster3d_name: str) -> bool:
+    def name_is_raster_3d(self, raster3d_name: str) -> bool:
         """return True if the given name is a 3D raster in the grass database."""
         map_id = self.get_id_from_name(raster3d_name)
         return bool(gs.find_file(name=map_id, element="raster_3d").get("file"))

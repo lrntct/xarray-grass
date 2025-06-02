@@ -55,7 +55,7 @@ class TestXarrayGrass:
         mapset_path = os.path.join(
             str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
         )
-        test_dataset = xr.open_dataset(mapset_path, raster3d=ACTUAL_RASTER3D_MAP)
+        test_dataset = xr.open_dataset(mapset_path, raster_3d=ACTUAL_RASTER3D_MAP)
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 3
@@ -77,7 +77,16 @@ class TestXarrayGrass:
         assert len(test_dataset.y) == region.rows
 
     def test_load_str3ds(self, grass_i, temp_gisdb) -> None:
-        pass
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(mapset_path, str3ds=RELATIVE_STR3DS)
+        region = grass_i.get_region()
+        assert isinstance(test_dataset, xr.Dataset)
+        assert len(test_dataset.dims) == 4
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
+        assert len(test_dataset.z) == region.depths
 
     def test_load_whole_mapset(self, grass_i, temp_gisdb):
         pass

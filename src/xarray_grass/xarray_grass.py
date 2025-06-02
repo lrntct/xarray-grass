@@ -31,7 +31,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
     open_dataset_parameters = [
         "filename_or_obj",
         "raster",
-        "raster3d",
+        "raster_3d",
         "strds",
         "str3ds",
         "drop_variables",
@@ -44,7 +44,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         filename_or_obj,
         *,
         raster: str | Iterable[str] = [],
-        raster3d: str | Iterable[str] = [],
+        raster_3d: str | Iterable[str] = [],
         strds: str | Iterable[str] = [],
         str3ds: str | Iterable[str] = [],
         drop_variables: Iterable[str],
@@ -56,11 +56,11 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         """
         open_func_params = dict(
             raster_list=raster,
-            raster3d_list=raster3d,
+            raster_3d_list=raster_3d,
             strds_list=strds,
             str3ds_list=str3ds,
         )
-        if not any([raster, raster3d, strds, str3ds]):
+        if not any([raster, raster_3d, strds, str3ds]):
             # list all the maps in the mapset / project
             pass
         else:
@@ -119,7 +119,7 @@ def dir_is_grass_project(filename_or_obj: str | Path) -> bool:
 def open_grass_maps(
     filename_or_obj: str | Path,
     raster_list: Iterable[str] = None,
-    raster3d_list: Iterable[str] = None,
+    raster_3d_list: Iterable[str] = None,
     strds_list: Iterable[str] = None,
     str3ds_list: Iterable[str] = None,
     raise_on_not_found: bool = True,
@@ -142,7 +142,7 @@ def open_grass_maps(
         gi = GrassInterface()
         # Open all given maps and identify non-existent data
         # Need refactoring
-        not_found = {k: [] for k in ["raster", "raster3d", "strds", "str3ds"]}
+        not_found = {k: [] for k in ["raster", "raster_3d", "strds", "str3ds"]}
         data_array_list = []
         for raster_map_name in raster_list:
             if not gi.name_is_raster(raster_map_name):
@@ -150,11 +150,11 @@ def open_grass_maps(
                 continue
             data_array = open_grass_raster(raster_map_name, gi)
             data_array_list.append(data_array)
-        for raster3d_map_name in raster3d_list:
-            if not gi.name_is_raster3d(raster3d_map_name):
-                not_found["raster3d"].append(raster3d_map_name)
+        for raster_3d_map_name in raster_3d_list:
+            if not gi.name_is_raster_3d(raster_3d_map_name):
+                not_found["raster_3d"].append(raster_3d_map_name)
                 continue
-            data_array = open_grass_raster3d(raster3d_map_name, gi)
+            data_array = open_grass_raster_3d(raster_3d_map_name, gi)
             data_array_list.append(data_array)
         for strds_name in strds_list:
             if not gi.name_is_strds(strds_name):
@@ -176,7 +176,7 @@ def open_grass_maps(
     return dataset
 
 
-def get_coordinates(grass_i: GrassInterface, raster3d: bool) -> dict:
+def get_coordinates(grass_i: GrassInterface, raster_3d: bool) -> dict:
     """return xarray coordinates from GRASS region."""
     current_region = grass_i.get_region()
     print(current_region)
@@ -187,7 +187,7 @@ def get_coordinates(grass_i: GrassInterface, raster3d: bool) -> dict:
     lim_t = current_region.t
     lim_b = current_region.b
     dz = current_region.tbres
-    if raster3d:
+    if raster_3d:
         dx = current_region.ewres3
         dy = current_region.nsres3
     else:
@@ -210,7 +210,7 @@ def get_coordinates(grass_i: GrassInterface, raster3d: bool) -> dict:
 
 def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single raster map."""
-    x_coords, y_coords, _ = get_coordinates(grass_i, raster3d=False).values()
+    x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["latitude", "longitude"]
@@ -232,9 +232,9 @@ def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray
     return data_array
 
 
-def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
+def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single 3D raster map."""
-    x_coords, y_coords, z_coords = get_coordinates(grass_i, raster3d=True).values()
+    x_coords, y_coords, z_coords = get_coordinates(grass_i, raster_3d=True).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["z", "latitude", "longitude"]
@@ -247,14 +247,14 @@ def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataA
         coordinates["x"] = x_coords
         coordinates["y"] = y_coords
     coordinates["z"] = z_coords
-    raster_array = grass_i.read_raster3d_map(raster3d_name)
+    raster_array = grass_i.read_raster3d_map(raster_3d_name)
     print(f"Raster3D shape: {raster_array.shape}")
 
     data_array = xr.DataArray(
         raster_array,
         coords=coordinates,
         dims=dims,
-        name=grass_i.get_name_from_id(raster3d_name),
+        name=grass_i.get_name_from_id(raster_3d_name),
     )
     return data_array
 
@@ -270,7 +270,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     TODO: add unit, description etc. as attributes
     TODO: lazy loading
     """
-    x_coords, y_coords, _ = get_coordinates(grass_i, raster3d=False).values()
+    x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["start_time", "latitude", "longitude"]
