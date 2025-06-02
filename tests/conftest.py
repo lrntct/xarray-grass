@@ -3,7 +3,6 @@ from pathlib import Path
 import zipfile
 from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta
-import os
 
 import requests
 import pytest
@@ -95,7 +94,7 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
         gs.run_command("g.mapsets", mapset="modis_lst")
 
         # Set smaller resolution for faster tests, and info for 3D rasters
-        gs.run_command("g.region", b=0, t=100, tbres=10, rows=150, cols=135)
+        gs.run_command("g.region", b=0, t=1500, res3=500, res=100)
 
         # Add relative and absolute str3ds
         gen_str3ds(temporal_type="relative")

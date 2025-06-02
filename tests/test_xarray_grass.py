@@ -4,12 +4,12 @@ import os
 import pytest
 import xarray as xr
 
-from xarray_grass import GrassInterface
 from xarray_grass.xarray_grass import dir_is_grass_mapset
 from xarray_grass.xarray_grass import dir_is_grass_project
 
 ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
 ACTUAL_RASTER_MAP = "elevation@PERMANENT"
+ACTUAL_RASTER3D_MAP = "test3d_1@PERMANENT"
 RELATIVE_STR3DS = "test_str3ds_relative"
 ABSOLUTE_STR3DS = "test_str3ds_absolute"
 
@@ -45,12 +45,23 @@ class TestXarrayGrass:
             str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
         )
         test_dataset = xr.open_dataset(mapset_path, raster=ACTUAL_RASTER_MAP)
+        region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 2
-        assert len(test_dataset.x) == grass_i.cols
-        assert len(test_dataset.y) == grass_i.rows
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
 
     def test_load_raster3d(self, grass_i, temp_gisdb):
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(mapset_path, raster3d=ACTUAL_RASTER3D_MAP)
+        region = grass_i.get_region()
+        assert isinstance(test_dataset, xr.Dataset)
+        assert len(test_dataset.dims) == 3
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
+        assert len(test_dataset.z) == region.depths
         assert True
 
     def test_load_strds(self, grass_i, temp_gisdb) -> None:
@@ -58,11 +69,12 @@ class TestXarrayGrass:
             Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
         )
         test_dataset = xr.open_dataset(mapset_path, strds=ACTUAL_STRDS)
-        # print(test_dataset)
+        print(test_dataset)
+        region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 3
-        assert len(test_dataset.x) == grass_i.cols
-        assert len(test_dataset.y) == grass_i.rows
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
 
     def test_load_str3ds(self, grass_i, temp_gisdb) -> None:
         pass

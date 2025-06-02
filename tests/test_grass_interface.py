@@ -1,7 +1,5 @@
 from collections import namedtuple
 from datetime import datetime
-import os
-from unittest import mock
 
 import pytest
 import numpy as np
@@ -19,8 +17,8 @@ ACTUAL_RASTER_MAP = "elevation@PERMANENT"
 
 
 def test_no_grass_session():
-    with pytest.raises(RuntimeError) as excinfo:
-        GrassInterface(region_id=None)
+    with pytest.raises(RuntimeError):
+        GrassInterface()
 
 
 @pytest.mark.usefixtures("grass_session_fixture")
@@ -122,8 +120,9 @@ class TestGrassInterface:
 
     def test_read_raster_map(self, grass_i):
         np_map = grass_i.read_raster_map(ACTUAL_RASTER_MAP)
+        region = grass_i.get_region()
         assert np_map is not None
-        assert np_map.shape == (grass_i.rows, grass_i.cols)
+        assert np_map.shape == (region.rows, region.cols)
         assert np_map.dtype == "float32"
         assert not np.isnan(np_map).any()
 
@@ -136,10 +135,14 @@ class TestGrassInterface:
             TestCase(np_dtype=np.float32, g_dtype="FCELL", map_name="test_write_f32"),
             TestCase(np_dtype=np.float64, g_dtype="DCELL", map_name="test_write_f64"),
         ]
+        region = grass_i.get_region()
         for test_case in test_cases:
             if test_case.g_dtype == "CELL":
                 np_array_good = rng.integers(
-                    0, 255, size=(grass_i.rows, grass_i.cols), dtype=test_case.np_dtype
+                    0,
+                    255,
+                    size=(region.rows, region.cols),
+                    dtype=test_case.np_dtype,
                 )
                 np_array_bad = rng.integers(
                     0, 255, size=(5, 2), dtype=test_case.np_dtype
@@ -147,7 +150,7 @@ class TestGrassInterface:
             else:
                 np_array_bad = rng.random(size=(20, 23), dtype=test_case.np_dtype)
                 np_array_good = rng.random(
-                    size=(grass_i.rows, grass_i.cols), dtype=test_case.np_dtype
+                    size=(region.rows, region.cols), dtype=test_case.np_dtype
                 )
             with pytest.raises(ValueError):
                 grass_i.write_raster_map(np_array_bad, test_case.map_name)
@@ -155,8 +158,8 @@ class TestGrassInterface:
             map_info = gs.parse_command(
                 "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
             )
-            assert map_info["rows"] == str(grass_i.rows)
-            assert map_info["cols"] == str(grass_i.cols)
+            assert map_info["rows"] == str(region.rows)
+            assert map_info["cols"] == str(region.cols)
             assert map_info["datatype"] == test_case.g_dtype
             # remove map
             gs.run_command(
@@ -165,7 +168,8 @@ class TestGrassInterface:
 
     def test_register_maps_in_stds(self, grass_i):
         rng = np.random.default_rng()
-        np_array = rng.random(size=(grass_i.rows, grass_i.cols), dtype="float32")
+        region = grass_i.get_region()
+        np_array = rng.random(size=(region.rows, region.cols), dtype="float32")
         grass_i.write_raster_map(np_array, "test_temporal_map1")
         grass_i.write_raster_map(np_array, "test_temporal_map2")
         maps_list = [

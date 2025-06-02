@@ -7,11 +7,11 @@ from typing import Self
 
 import numpy as np
 
-# Needed to be able to import grass modules
+# Needed to import grass modules
 import grass_session  # noqa: F401
 import grass.script as gs
+from grass.script import array as garray
 import grass.pygrass.utils as gutils
-from grass.pygrass.gis.region import Region
 from grass.pygrass import raster as graster
 import grass.temporal as tgis
 
@@ -69,31 +69,42 @@ class GrassInterface(object):
         ),
     }
 
-    def __init__(self, region_id: str | None = None, overwrite: bool = False):
+    def __init__(self, overwrite: bool = False):
         # Check if in a GRASS session
         if "GISRC" not in os.environ:
             raise RuntimeError("GRASS session not set.")
         self.overwrite = overwrite
         tgis.init()
-        # Set region
-        self.region_id = region_id
-        if self.region_id:
-            gs.use_temp_region()
-            gs.run_command("g.region", region=region_id)
-        self.region = Region()
-        self.cols = self.region.cols
-        self.rows = self.region.rows
-        self.dx = self.region.ewres
-        self.dy = self.region.nsres
-        self.dz = self.region.tbres
-        self.reg_bbox = {
-            "e": self.region.east,
-            "w": self.region.west,
-            "n": self.region.north,
-            "s": self.region.south,
-            "t": self.region.top,
-            "b": self.region.bottom,
+
+    def get_region(self) -> namedtuple:
+        """Return the current GRASS region."""
+        region_raw = gs.parse_command("g.region", flags="g3")
+        type_dict = {
+            "projection": str,
+            "zone": str,
+            "n": float,
+            "s": float,
+            "w": float,
+            "e": float,
+            "t": float,
+            "b": float,
+            "nsres": float,
+            "nsres3": float,
+            "ewres": float,
+            "ewres3": float,
+            "tbres": float,
+            "rows": int,
+            "rows3": int,
+            "cols": int,
+            "cols3": int,
+            "depths": int,
+            "cells": int,
+            "cells3": int,
         }
+        RegionData = namedtuple("RegionData", region_raw.keys())
+        region = {k: type_dict[k](v) for k, v in region_raw.items() if v is not None}
+        region = RegionData(**region)
+        return region
 
     @staticmethod
     def is_latlon():
@@ -252,9 +263,16 @@ class GrassInterface(object):
             array = np.array(rast)
         return array
 
+    @staticmethod
+    def read_raster3d_map(rast3d_name: str) -> np.ndarray:
+        """Read a GRASS 3D raster and return a numpy array"""
+        array = garray.array3d(mapname=rast3d_name)
+        return array
+
     def write_raster_map(self, arr: np.ndarray, rast_name: str) -> Self:
         mtype: str = self.grass_dtype(arr.dtype)
-        region_shape = (self.rows, self.cols)
+        region = self.get_region()
+        region_shape = (region.rows, region.cols)
         if region_shape != arr.shape:
             raise ValueError(
                 f"Cannot write an array of shape {arr.shape} into "

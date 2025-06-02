@@ -20,7 +20,7 @@ import numpy as np
 from xarray.backends import BackendEntrypoint
 from xarray.backends import BackendArray
 import xarray as xr
-import grass_session
+import grass_session  # noqa: F401
 from xarray_grass.grass_interface import GrassInterface
 
 
@@ -176,17 +176,23 @@ def open_grass_maps(
     return dataset
 
 
-def get_coordinates(grass_i: GrassInterface) -> dict:
+def get_coordinates(grass_i: GrassInterface, raster3d: bool) -> dict:
     """return xarray coordinates from GRASS region."""
-    lim_e = grass_i.reg_bbox["e"]
-    lim_w = grass_i.reg_bbox["w"]
-    lim_n = grass_i.reg_bbox["n"]
-    lim_s = grass_i.reg_bbox["s"]
-    lim_t = grass_i.reg_bbox["t"]
-    lim_b = grass_i.reg_bbox["b"]
-    dx = grass_i.dx
-    dy = grass_i.dy
-    dz = grass_i.dz
+    current_region = grass_i.get_region()
+    print(current_region)
+    lim_e = current_region.e
+    lim_w = current_region.w
+    lim_n = current_region.n
+    lim_s = current_region.s
+    lim_t = current_region.t
+    lim_b = current_region.b
+    dz = current_region.tbres
+    if raster3d:
+        dx = current_region.ewres3
+        dy = current_region.nsres3
+    else:
+        dx = current_region.ewres
+        dy = current_region.nsres
     # GRASS limits are at the edge of the region.
     # In the exported DataArray, coordinates are at the center of the cell
     # Stop not changed to include it in the range
@@ -204,7 +210,7 @@ def get_coordinates(grass_i: GrassInterface) -> dict:
 
 def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single raster map."""
-    x_coords, y_coords, _ = get_coordinates(grass_i).values()
+    x_coords, y_coords, _ = get_coordinates(grass_i, raster3d=False).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["latitude", "longitude"]
@@ -228,7 +234,29 @@ def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray
 
 def open_grass_raster3d(raster3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single 3D raster map."""
-    pass
+    x_coords, y_coords, z_coords = get_coordinates(grass_i, raster3d=True).values()
+    is_latlon = grass_i.is_latlon()
+    if is_latlon:
+        dims = ["z", "latitude", "longitude"]
+        coordinates = dict.fromkeys(dims)
+        coordinates["longitude"] = x_coords
+        coordinates["latitude"] = y_coords
+    else:
+        dims = ["z", "y", "x"]
+        coordinates = dict.fromkeys(dims)
+        coordinates["x"] = x_coords
+        coordinates["y"] = y_coords
+    coordinates["z"] = z_coords
+    raster_array = grass_i.read_raster3d_map(raster3d_name)
+    print(f"Raster3D shape: {raster_array.shape}")
+
+    data_array = xr.DataArray(
+        raster_array,
+        coords=coordinates,
+        dims=dims,
+        name=grass_i.get_name_from_id(raster3d_name),
+    )
+    return data_array
 
 
 def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray:
@@ -241,9 +269,8 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """must be called from within a grass session
     TODO: add unit, description etc. as attributes
     TODO: lazy loading
-    TODO: Make sure the coordinate represents what it should
     """
-    x_coords, y_coords, _ = get_coordinates(grass_i).values()
+    x_coords, y_coords, _ = get_coordinates(grass_i, raster3d=False).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
         dims = ["start_time", "latitude", "longitude"]
