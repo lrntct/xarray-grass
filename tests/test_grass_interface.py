@@ -42,6 +42,16 @@ class TestGrassInterface:
             grass_i.grass_dtype("int")
             grass_i.grass_dtype("float")
 
+    def test_get_region(self, grass_i):
+        """Test the get_region method."""
+        region = grass_i.get_region()
+        assert region is not None
+        assert region.rows > 0
+        assert region.cols > 0
+        assert region.n > region.s
+        assert region.e > region.w
+        assert region.t > region.b
+
     def test_is_latlon(self):
         assert GrassInterface.is_latlon() is False
 
