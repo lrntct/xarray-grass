@@ -254,6 +254,19 @@ class GrassInterface(object):
         )
         return infos
 
+    def list_maps_in_str3ds(self, strds_name: str) -> list[MapData]:
+        strds = tgis.open_stds.open_old_stds(strds_name, "str3ds")
+        maplist = strds.get_registered_maps(
+            columns=",".join(strds_cols), order="start_time"
+        )
+        # check if every map exist
+        maps_not_found = [m[0] for m in maplist if not self.name_is_raster_3d(m[0])]
+        if any(maps_not_found):
+            err_msg = "STR3DS <{}>: Can't find following maps: {}"
+            str_lst = ",".join(maps_not_found)
+            raise RuntimeError(err_msg.format(strds_name, str_lst))
+        return [MapData(*i) for i in maplist]
+
     def list_maps_in_strds(self, strds_name: str) -> list[MapData]:
         strds = tgis.open_stds.open_old_stds(strds_name, "strds")
         maplist = strds.get_registered_maps(

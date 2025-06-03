@@ -14,6 +14,7 @@ from xarray_grass import GrassInterface
 
 ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
 ACTUAL_RASTER_MAP = "elevation@PERMANENT"
+RELATIVE_STR3DS = "test_str3ds_relative"
 
 
 def test_no_grass_session():
@@ -127,6 +128,10 @@ class TestGrassInterface:
     def test_list_maps_in_strds(self, grass_i):
         map_list = grass_i.list_maps_in_strds(ACTUAL_STRDS)
         assert len(map_list) == 24
+
+    def test_list_maps_in_str3ds(self, grass_i):
+        map_list = grass_i.list_maps_in_str3ds(RELATIVE_STR3DS)
+        assert len(map_list) == 3
 
     def test_read_raster_map(self, grass_i):
         np_map = grass_i.read_raster_map(ACTUAL_RASTER_MAP)
