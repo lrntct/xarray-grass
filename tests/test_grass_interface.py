@@ -96,8 +96,14 @@ class TestGrassInterface:
     def test_get_proj_str(self):
         proj_str = GrassInterface.get_proj_str()
         ref_str = gs.read_command("g.proj", flags="jf")
-        assert proj_str == ref_str
+        assert proj_str == ref_str.replace("\n", "")
         assert isinstance(proj_str, str)
+
+    def test_get_crs_wkt_str(self):
+        crs_str = GrassInterface.get_crs_wkt_str()
+        ref_str = gs.read_command("g.proj", flags="wf")
+        assert crs_str == ref_str.replace("\n", "")
+        assert isinstance(crs_str, str)
 
     def test_has_mask(self):
         assert GrassInterface.has_mask() is False

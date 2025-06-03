@@ -62,7 +62,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             str3ds_list=str3ds,
         )
         if not any([raster, raster_3d, strds, str3ds]):
-            # list all the maps in the mapset / project
+            # TODO: list all the maps in the mapset / project
             pass
         else:
             # Format str inputs into list
@@ -199,7 +199,8 @@ def open_grass_maps(
             raise ValueError(f"Objects not found: {not_found}")
         data_array_list = [da for da in data_array_list if isinstance(da, xr.DataArray)]
         dataset = xr.merge(data_array_list)
-        dataset.attrs["crs"] = gi.get_proj_str()
+        dataset.attrs["crs_proj"] = gi.get_proj_str()
+        dataset.attrs["crs_wkt"] = gi.get_crs_wkt_str()
     finally:
         if session is not None:
             session.__exit__(None, None, None)

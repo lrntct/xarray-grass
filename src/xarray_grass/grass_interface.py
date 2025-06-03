@@ -175,7 +175,11 @@ class GrassInterface(object):
 
     @staticmethod
     def get_proj_str() -> str:
-        return gs.read_command("g.proj", flags="jf")
+        return gs.read_command("g.proj", flags="jf").replace("\n", "")
+
+    @staticmethod
+    def get_crs_wkt_str() -> str:
+        return gs.read_command("g.proj", flags="wf").replace("\n", "")
 
     def grass_dtype(self, dtype: str) -> str:
         if dtype in self.dtype_conv["DCELL"]:
