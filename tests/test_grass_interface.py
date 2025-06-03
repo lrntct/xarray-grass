@@ -116,8 +116,8 @@ class TestGrassInterface:
         strds_list = GrassInterface.list_strds()
         assert strds_list == [ACTUAL_STRDS]
 
-    def test_get_strds_infos(self, grass_i):
-        strds_infos = grass_i.get_strds_infos(ACTUAL_STRDS)
+    def test_get_stds_infos(self, grass_i):
+        strds_infos = grass_i.get_stds_infos(ACTUAL_STRDS, stds_type="strds")
         assert strds_infos.id == ACTUAL_STRDS
         assert strds_infos.temporal_type == "absolute"
         assert strds_infos.time_unit is None

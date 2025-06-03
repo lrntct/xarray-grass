@@ -229,9 +229,13 @@ class GrassInterface(object):
         objects_dict["str3ds"] = self.list_str3ds(mapset)
         return objects_dict
 
-    def get_strds_infos(self, strds_name) -> STRDSInfos:
+    def get_stds_infos(self, strds_name, stds_type) -> STRDSInfos:
         strds_id = self.get_id_from_name(strds_name)
-        strds = tgis.open_stds.open_old_stds(strds_id, "strds")
+        if stds_type not in ["strds", "str3ds"]:
+            raise ValueError(
+                f"Invalid strds type: {stds_type}. Must be 'strds' or 'str3ds'."
+            )
+        strds = tgis.open_stds.open_old_stds(strds_id, stds_type)
         temporal_type = strds.get_temporal_type()
         if temporal_type == "relative":
             start_time, end_time, time_unit = strds.get_relative_time()

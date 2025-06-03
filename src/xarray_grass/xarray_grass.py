@@ -83,10 +83,9 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         return open_grass_maps(filename_or_obj, **open_func_params)
 
     def guess_can_open(self, filename_or_obj) -> bool:
-        """infer if the path is a GRASS mapset."""
-        return dir_is_grass_mapset(filename_or_obj) or dir_is_grass_project(
-            filename_or_obj
-        )
+        """infer if the path is a GRASS mapset.
+        TODO: add support for whole project."""
+        return dir_is_grass_mapset(filename_or_obj)
 
 
 def dir_is_grass_mapset(filename_or_obj: str | Path) -> bool:
@@ -206,7 +205,6 @@ def open_grass_maps(
                 data_array_list.append(data_array)
         if raise_on_not_found and any(not_found.values()):
             raise ValueError(f"Objects not found: {not_found}")
-        data_array_list = [da for da in data_array_list if isinstance(da, xr.DataArray)]
         dataset = xr.merge(data_array_list)
         dataset.attrs["crs_proj"] = gi.get_proj_str()
         dataset.attrs["crs_wkt"] = gi.get_crs_wkt_str()
@@ -276,15 +274,15 @@ def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.Dat
     x_coords, y_coords, z_coords = get_coordinates(grass_i, raster_3d=True).values()
     is_latlon = grass_i.is_latlon()
     if is_latlon:
-        dims = ["z", "latitude", "longitude"]
+        dims = ["z", "latitude_3d", "longitude_3d"]
         coordinates = dict.fromkeys(dims)
-        coordinates["longitude"] = x_coords
-        coordinates["latitude"] = y_coords
+        coordinates["longitude_3d"] = x_coords
+        coordinates["latitude_3d"] = y_coords
     else:
-        dims = ["z", "y", "x"]
+        dims = ["z", "y_3d", "x_3d"]
         coordinates = dict.fromkeys(dims)
-        coordinates["x"] = x_coords
-        coordinates["y"] = y_coords
+        coordinates["x_3d"] = x_coords
+        coordinates["y_3d"] = y_coords
     coordinates["z"] = z_coords
     raster_array = grass_i.read_raster3d_map(raster_3d_name)
 
@@ -302,22 +300,29 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
     TODO: Figure out what to do when the z value of the maps is time."""
     x_coords, y_coords, z_coords = get_coordinates(grass_i, raster_3d=True).values()
     is_latlon = grass_i.is_latlon()
-    if is_latlon:
-        dims = ["start_time", "z", "latitude", "longitude"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["longitude"] = x_coords
-        coordinates["latitude"] = y_coords
+    strds_infos = grass_i.get_stds_infos(str3ds_name, stds_type="str3ds")
+    if strds_infos.temporal_type == "absolute":
+        start_time_dim = "start_time"
+        end_time_dim = "end_time"
     else:
-        dims = ["start_time", "z", "y", "x"]
+        start_time_dim = f"start_time_{strds_infos.time_unit}"
+        end_time_dim = f"end_time_{strds_infos.time_unit}"
+    if is_latlon:
+        dims = [start_time_dim, "z", "latitude_3d", "longitude_3d"]
         coordinates = dict.fromkeys(dims)
-        coordinates["x"] = x_coords
-        coordinates["y"] = y_coords
+        coordinates["longitude_3d"] = x_coords
+        coordinates["latitude_3d"] = y_coords
+    else:
+        dims = [start_time_dim, "z", "y_3d", "x_3d"]
+        coordinates = dict.fromkeys(dims)
+        coordinates["x_3d"] = x_coords
+        coordinates["y_3d"] = y_coords
     coordinates["z"] = z_coords
     map_list = grass_i.list_maps_in_str3ds(str3ds_name)
     array_list = []
     for map_data in map_list:
-        coordinates["start_time"] = [map_data.start_time]
-        coordinates["end_time"] = ("start_time", [map_data.end_time])
+        coordinates[start_time_dim] = [map_data.start_time]
+        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
         ndarray = grass_i.read_raster3d_map(map_data.id)
         # add time dimension at the beginning
         ndarray = np.expand_dims(ndarray, axis=0)
@@ -328,7 +333,7 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
             name=grass_i.get_name_from_id(str3ds_name),
         )
         array_list.append(data_array)
-    return xr.concat(array_list, dim="start_time")
+    return xr.concat(array_list, dim=start_time_dim)
 
 
 def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
@@ -338,21 +343,28 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """
     x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
     is_latlon = grass_i.is_latlon()
+    strds_infos = grass_i.get_stds_infos(strds_name, stds_type="strds")
+    if strds_infos.temporal_type == "absolute":
+        start_time_dim = "start_time"
+        end_time_dim = "end_time"
+    else:
+        start_time_dim = f"start_time_{strds_infos.time_unit}"
+        end_time_dim = f"end_time_{strds_infos.time_unit}"
     if is_latlon:
-        dims = ["start_time", "latitude", "longitude"]
+        dims = [start_time_dim, "latitude", "longitude"]
         coordinates = dict.fromkeys(dims)
         coordinates["longitude"] = x_coords
         coordinates["latitude"] = y_coords
     else:
-        dims = ["start_time", "y", "x"]
+        dims = [start_time_dim, "y", "x"]
         coordinates = dict.fromkeys(dims)
         coordinates["x"] = x_coords
         coordinates["y"] = y_coords
     map_list = grass_i.list_maps_in_strds(strds_name)
     array_list = []
     for map_data in map_list:
-        coordinates["start_time"] = [map_data.start_time]
-        coordinates["end_time"] = ("start_time", [map_data.end_time])
+        coordinates[start_time_dim] = [map_data.start_time]
+        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
         ndarray = grass_i.read_raster_map(map_data.id)
         # add time dimension at the beginning
         ndarray = np.expand_dims(ndarray, axis=0)
@@ -363,7 +375,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
             name=grass_i.get_name_from_id(strds_name),
         )
         array_list.append(data_array)
-    return xr.concat(array_list, dim="start_time")
+    return xr.concat(array_list, dim=start_time_dim)
 
 
 class GrassBackendArray(BackendArray):

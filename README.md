@@ -14,7 +14,7 @@ An Xarray backend for GRASS raster data.
 - [x] Load a single Space-time Raster Dataset (strds)
 - [x] Load a single raster_3d map
 - [x] Load a single str3ds
-- [ ] Load list of all the above
+- [x] Load list of all the above
 - [ ] Load a full mapset
 
 ### Other functionalities

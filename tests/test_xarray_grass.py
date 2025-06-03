@@ -9,7 +9,9 @@ from xarray_grass.xarray_grass import dir_is_grass_project
 
 ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
 ACTUAL_RASTER_MAP = "elevation@PERMANENT"
+ACTUAL_RASTER_MAP2 = "MOD11B3.A2015060.h11v05.single_LST_Day_6km@modis_lst"
 ACTUAL_RASTER3D_MAP = "test3d_1@PERMANENT"
+ACTUAL_RASTER3D_MAP2 = "test3d_3@PERMANENT"
 RELATIVE_STR3DS = "test_str3ds_relative"
 ABSOLUTE_STR3DS = "test_str3ds_absolute"
 
@@ -59,8 +61,8 @@ class TestXarrayGrass:
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 3
-        assert len(test_dataset.x) == region.cols3
-        assert len(test_dataset.y) == region.rows3
+        assert len(test_dataset.x_3d) == region.cols3
+        assert len(test_dataset.y_3d) == region.rows3
         assert len(test_dataset.z) == region.depths
         assert True
 
@@ -69,7 +71,6 @@ class TestXarrayGrass:
             Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
         )
         test_dataset = xr.open_dataset(mapset_path, strds=ACTUAL_STRDS)
-        print(test_dataset)
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 3
@@ -84,8 +85,29 @@ class TestXarrayGrass:
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 4
-        assert len(test_dataset.x) == region.cols3
-        assert len(test_dataset.y) == region.rows3
+        assert len(test_dataset.x_3d) == region.cols3
+        assert len(test_dataset.y_3d) == region.rows3
+        assert len(test_dataset.z) == region.depths
+
+    def test_load_multiple_rasters(self, grass_i, temp_gisdb) -> None:
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(
+            mapset_path,
+            raster=[ACTUAL_RASTER_MAP, ACTUAL_RASTER_MAP2],
+            raster_3d=[ACTUAL_RASTER3D_MAP, ACTUAL_RASTER3D_MAP2],
+            str3ds=[RELATIVE_STR3DS, ABSOLUTE_STR3DS],
+            strds=ACTUAL_STRDS,
+        )
+        region = grass_i.get_region()
+        assert isinstance(test_dataset, xr.Dataset)
+        # z, y_3d, x_3d, y, x, absolute and relative time
+        assert len(test_dataset.dims) == 7
+        assert len(test_dataset.x_3d) == region.cols3
+        assert len(test_dataset.y_3d) == region.rows3
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
         assert len(test_dataset.z) == region.depths
 
     def test_load_whole_mapset(self, grass_i, temp_gisdb):
