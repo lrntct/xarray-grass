@@ -59,8 +59,8 @@ class TestXarrayGrass:
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 3
-        assert len(test_dataset.x) == region.cols
-        assert len(test_dataset.y) == region.rows
+        assert len(test_dataset.x) == region.cols3
+        assert len(test_dataset.y) == region.rows3
         assert len(test_dataset.z) == region.depths
         assert True
 
@@ -84,8 +84,8 @@ class TestXarrayGrass:
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 4
-        assert len(test_dataset.x) == region.cols
-        assert len(test_dataset.y) == region.rows
+        assert len(test_dataset.x) == region.cols3
+        assert len(test_dataset.y) == region.rows3
         assert len(test_dataset.z) == region.depths
 
     def test_load_whole_mapset(self, grass_i, temp_gisdb):

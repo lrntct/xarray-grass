@@ -76,7 +76,18 @@ class GrassInterface(object):
         self.overwrite = overwrite
         tgis.init()
 
-    def get_region(self) -> namedtuple:
+    @staticmethod
+    def get_gisenv() -> dict[str]:
+        """Return the current GRASS environment."""
+        return gs.gisenv()
+
+    @staticmethod
+    def get_accessible_mapsets() -> list[str]:
+        """Return a list of accessible mapsets."""
+        return gs.parse_command("g.mapsets", flags="p", format="json")["mapsets"]
+
+    @staticmethod
+    def get_region() -> namedtuple:
         """Return the current GRASS region."""
         region_raw = gs.parse_command("g.region", flags="g3")
         type_dict = {

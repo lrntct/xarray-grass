@@ -13,6 +13,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -136,10 +137,36 @@ def open_grass_maps(
     mapset = dirpath.stem
     project = dirpath.parent.stem
     gisdb = dirpath.parent.parent
-    with grass_session.Session(
-        gisdb=str(gisdb), location=str(project), mapset=str(mapset)
-    ):
+
+    # Check if we're already in a GRASS session
+    session = None
+    if "GISRC" not in os.environ:
+        # No existing session, create a new one
+        session = grass_session.Session(
+            gisdb=str(gisdb), location=str(project), mapset=str(mapset)
+        )
+        session.__enter__()
         gi = GrassInterface()
+
+    else:
+        # We're in an existing session, check if it matches the requested path
+        gi = GrassInterface()
+        gisenv = gi.get_gisenv()
+        current_gisdb = gisenv["GISDBASE"]
+        current_location = gisenv["LOCATION_NAME"]
+        accessible_mapsets = gi.get_accessible_mapsets()
+
+        requested_path = Path(gisdb) / Path(project)
+        current_path = Path(current_gisdb) / Path(current_location)
+
+        if requested_path != current_path or str(mapset) not in accessible_mapsets:
+            raise ValueError(
+                f"Cannot access {gisdb}/{project}/{mapset} "
+                f"from current GRASS session in project "
+                f"{current_gisdb}/{current_location}. "
+                f"Accessible mapsets: {accessible_mapsets}."
+            )
+    try:
         # Open all given maps and identify non-existent data
         # Need refactoring
         not_found = {k: [] for k in ["raster", "raster_3d", "strds", "str3ds"]}
@@ -173,6 +200,9 @@ def open_grass_maps(
         data_array_list = [da for da in data_array_list if isinstance(da, xr.DataArray)]
         dataset = xr.merge(data_array_list)
         dataset.attrs["crs"] = gi.get_proj_str()
+    finally:
+        if session is not None:
+            session.__exit__(None, None, None)
     return dataset
 
 
