@@ -167,34 +167,43 @@ def open_grass_maps(
                 f"Accessible mapsets: {accessible_mapsets}."
             )
     try:
+        # Configuration for processing different GRASS map types
+        map_processing_configs = [
+            {
+                "input_list": raster_list,
+                "existence_check_method": gi.name_is_raster,
+                "open_function": open_grass_raster,
+                "not_found_key": "raster",
+            },
+            {
+                "input_list": raster_3d_list,
+                "existence_check_method": gi.name_is_raster_3d,
+                "open_function": open_grass_raster_3d,
+                "not_found_key": "raster_3d",
+            },
+            {
+                "input_list": strds_list,
+                "existence_check_method": gi.name_is_strds,
+                "open_function": open_grass_strds,
+                "not_found_key": "strds",
+            },
+            {
+                "input_list": str3ds_list,
+                "existence_check_method": gi.name_is_str3ds,
+                "open_function": open_grass_str3ds,
+                "not_found_key": "str3ds",
+            },
+        ]
         # Open all given maps and identify non-existent data
-        # Need refactoring
-        not_found = {k: [] for k in ["raster", "raster_3d", "strds", "str3ds"]}
+        not_found = {config["not_found_key"]: [] for config in map_processing_configs}
         data_array_list = []
-        for raster_map_name in raster_list:
-            if not gi.name_is_raster(raster_map_name):
-                not_found["raster"].append(raster_map_name)
-                continue
-            data_array = open_grass_raster(raster_map_name, gi)
-            data_array_list.append(data_array)
-        for raster_3d_map_name in raster_3d_list:
-            if not gi.name_is_raster_3d(raster_3d_map_name):
-                not_found["raster_3d"].append(raster_3d_map_name)
-                continue
-            data_array = open_grass_raster_3d(raster_3d_map_name, gi)
-            data_array_list.append(data_array)
-        for strds_name in strds_list:
-            if not gi.name_is_strds(strds_name):
-                not_found["strds"].append(strds_name)
-                continue
-            data_array = open_grass_strds(strds_name, gi)
-            data_array_list.append(data_array)
-        for str3ds_name in str3ds_list:
-            if not gi.name_is_str3ds(str3ds_name):
-                not_found["str3ds"].append(str3ds_name)
-                continue
-            data_array = open_grass_str3ds(str3ds_name, gi)
-            data_array_list.append(data_array)
+        for config in map_processing_configs:
+            for map_name in config["input_list"]:
+                if not config["existence_check_method"](map_name):
+                    not_found[config["not_found_key"]].append(map_name)
+                    continue
+                data_array = config["open_function"](map_name, gi)
+                data_array_list.append(data_array)
         if raise_on_not_found and any(not_found.values()):
             raise ValueError(f"Objects not found: {not_found}")
         data_array_list = [da for da in data_array_list if isinstance(da, xr.DataArray)]
