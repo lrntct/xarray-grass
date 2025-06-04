@@ -38,7 +38,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         "drop_variables",
     ]
     description = "Open a GRASS mapset in Xarray"
-    url = "https://link_to/your_backend/documentation"  # TODO
+    url = "https://github.com/lrntct/xarray-grass"
 
     def open_dataset(
         self,
@@ -49,8 +49,6 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         strds: str | Iterable[str] = [],
         str3ds: str | Iterable[str] = [],
         drop_variables: Iterable[str],
-        # other backend specific keyword arguments
-        # `chunks` and `cache` DO NOT go here, they are handled by xarray
     ) -> xr.Dataset:
         """Open GRASS project or mapset as an xarray.Dataset.
         TODO: add support for whole project.
@@ -63,7 +61,31 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         )
         if not any([raster, raster_3d, strds, str3ds]):
             # TODO: list all the maps in the mapset / project
-            pass
+            # If a map is in a STDS, do not load it as a single map.
+            gi = GrassInterface()
+            grass_objects = gi.list_grass_objects()
+            # strds
+            rasters_in_strds = []
+            for strds_name in grass_objects["strds"]:
+                maps_in_strds = gi.list_maps_in_strds(strds_name)
+                rasters_in_strds.extend([map_data.id for map_data in maps_in_strds])
+                open_func_params["strds_list"].append(strds_name)
+            raster3ds_in_str3ds = []
+            # str3ds
+            for str3ds_name in grass_objects["str3ds"]:
+                maps_in_str3ds = gi.list_maps_in_str3ds(str3ds_name)
+                raster3ds_in_str3ds.extend([map_data.id for map_data in maps_in_str3ds])
+                open_func_params["str3ds_list"].append(str3ds_name)
+            # rasters not in strds
+            open_func_params["raster_list"] = [
+                name for name in grass_objects["raster"] if name not in rasters_in_strds
+            ]
+            # rasters 3d not in str3ds
+            open_func_params["raster_3d_list"] = [
+                name
+                for name in grass_objects["raster_3d"]
+                if name not in raster3ds_in_str3ds
+            ]
         else:
             # Format str inputs into list
             for object_type, elem in open_func_params.items():

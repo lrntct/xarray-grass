@@ -224,7 +224,7 @@ class GrassInterface(object):
         """Return all GRASS objects in a given mapset."""
         objects_dict = {}
         objects_dict["raster"] = self.list_raster(mapset)
-        objects_dict["raster3d"] = self.list_raster3d(mapset)
+        objects_dict["raster_3d"] = self.list_raster3d(mapset)
         objects_dict["strds"] = self.list_strds(mapset)
         objects_dict["str3ds"] = self.list_str3ds(mapset)
         return objects_dict

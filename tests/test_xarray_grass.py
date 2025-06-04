@@ -112,7 +112,68 @@ class TestXarrayGrass:
         assert len(test_dataset.z) == region.depths
 
     def test_load_whole_mapset(self, grass_i, temp_gisdb) -> None:
-        pass
+        mapset_path = (
+            Path(temp_gisdb.gisdb) / Path(temp_gisdb.project) / Path(temp_gisdb.mapset)
+        )
+        whole_mapset = xr.open_dataset(mapset_path)
+        region = grass_i.get_region()
+        dict_grass_objects = grass_i.list_grass_objects()
+
+        # rasters and strds
+        list_strds_id = dict_grass_objects["strds"]
+        list_strds_name = [
+            grass_i.get_name_from_id(strds_id) for strds_id in list_strds_id
+        ]
+        list_rasters = [
+            grass_i.get_name_from_id(r) for r in dict_grass_objects["raster"]
+        ]
+        list_rasters_in_strds = []
+        for strds_id in list_strds_id:
+            list_rasters_in_strds.extend(
+                [
+                    grass_i.get_name_from_id(map_data.id)
+                    for map_data in grass_i.list_maps_in_strds(strds_id)
+                ]
+            )
+        list_rasters_not_in_strds = [
+            r for r in list_rasters if r not in list_rasters_in_strds
+        ]
+
+        # raster_3d and str3ds
+        list_str3ds_id = dict_grass_objects["str3ds"]
+        list_str3ds_name = [
+            grass_i.get_name_from_id(str3ds_id) for str3ds_id in list_str3ds_id
+        ]
+        list_raster3d = [
+            grass_i.get_name_from_id(r) for r in dict_grass_objects["raster_3d"]
+        ]
+        list_raster3d_in_str3ds = []
+        for str3ds_id in list_str3ds_id:
+            list_raster3d_in_str3ds.extend(
+                [
+                    grass_i.get_name_from_id(map_data.id)
+                    for map_data in grass_i.list_maps_in_str3ds(str3ds_id)
+                ]
+            )
+        list_raster3d_not_in_str3ds = [
+            r for r in list_raster3d if r not in list_raster3d_in_str3ds
+        ]
+
+        all_variables = (
+            list_raster3d_not_in_str3ds
+            + list_rasters_not_in_strds
+            + list_strds_name
+            + list_str3ds_name
+        )
+        assert isinstance(whole_mapset, xr.Dataset)
+        assert len(whole_mapset.dims) == 7
+        assert len(whole_mapset) == len(all_variables)
+        assert all(var in whole_mapset for var in all_variables)
+        assert len(whole_mapset.x_3d) == region.cols3
+        assert len(whole_mapset.y_3d) == region.rows3
+        assert len(whole_mapset.x) == region.cols
+        assert len(whole_mapset.y) == region.rows
+        assert len(whole_mapset.z) == region.depths
 
     def test_load_bad_name(self, temp_gisdb) -> None:
         mapset_path = (
