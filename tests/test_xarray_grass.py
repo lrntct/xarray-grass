@@ -104,13 +104,14 @@ class TestXarrayGrass:
         assert isinstance(test_dataset, xr.Dataset)
         # z, y_3d, x_3d, y, x, absolute and relative time
         assert len(test_dataset.dims) == 7
+        assert len(test_dataset) == 7
         assert len(test_dataset.x_3d) == region.cols3
         assert len(test_dataset.y_3d) == region.rows3
         assert len(test_dataset.x) == region.cols
         assert len(test_dataset.y) == region.rows
         assert len(test_dataset.z) == region.depths
 
-    def test_load_whole_mapset(self, grass_i, temp_gisdb):
+    def test_load_whole_mapset(self, grass_i, temp_gisdb) -> None:
         pass
 
     def test_load_bad_name(self, temp_gisdb) -> None:
@@ -122,5 +123,25 @@ class TestXarrayGrass:
             xr.open_dataset(mapset_path, raster="not_a_real_map")
             xr.open_dataset(mapset_path, str3ds=ACTUAL_RASTER_MAP)
 
-    def test_drop_variables(self):
-        pass
+    def test_drop_variables(self, grass_i, temp_gisdb) -> None:
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(
+            mapset_path,
+            raster=[ACTUAL_RASTER_MAP, ACTUAL_RASTER_MAP2],
+            raster_3d=[ACTUAL_RASTER3D_MAP, ACTUAL_RASTER3D_MAP2],
+            str3ds=[RELATIVE_STR3DS, ABSOLUTE_STR3DS],
+            strds=ACTUAL_STRDS,
+            drop_variables=[ACTUAL_RASTER_MAP],
+        )
+        region = grass_i.get_region()
+        assert isinstance(test_dataset, xr.Dataset)
+        # z, y_3d, x_3d, y, x, absolute and relative time
+        assert len(test_dataset.dims) == 7
+        assert len(test_dataset) == 6  # 7 - 1 dropped variable
+        assert len(test_dataset.x_3d) == region.cols3
+        assert len(test_dataset.y_3d) == region.rows3
+        assert len(test_dataset.x) == region.cols
+        assert len(test_dataset.y) == region.rows
+        assert len(test_dataset.z) == region.depths

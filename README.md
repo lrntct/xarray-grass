@@ -49,7 +49,7 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 - [x] Load a single str3ds
 - [x] Load a combination of all the above
 - [ ] Load a full mapset
-- [ ] Support for the `drop_variables` parameter
+- [x] Support for the `drop_variables` parameter
 - [ ] Lazy loading of all raster types
 - [ ] Write from xarray to GRASS
 
