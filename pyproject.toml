@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "xarray-grass"
 dynamic = ["version"]
-description = "An xarray backend for GRASS raster data."
+description = "An GRASS backend for Xarray."
 authors = [
     { name = "Laurent Courty", email = "lrntct@gmail.com" }
 ]
@@ -16,6 +16,17 @@ dependencies = [
     "grass-session>=0.5",
     "numpy>=2.2.5",
     "xarray>=2025.4.0",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
 ]
 
 [project.urls]
