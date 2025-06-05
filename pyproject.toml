@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "xarray-grass"
 dynamic = ["version"]
-description = "An GRASS backend for Xarray."
+description = "An Xarray backend for GRASS raster data."
 authors = [
     { name = "Laurent Courty", email = "lrntct@gmail.com" }
 ]

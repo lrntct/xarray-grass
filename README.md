@@ -7,12 +7,15 @@
 A [GRASS](https://grass.osgeo.org/) backend for [Xarray](https://xarray.dev/).
 Explore all your GRASS rasters with Xarray.
 
-## Installation and usage
+## Installation
 
 Install the package using `uv` or `pip`:
 
 `uv add xarray-grass`
 
+You need to install GRASS independently.
+
+## Loading GRASS data as an Xarray Dataset
 
 ```python
 >>> import xarray as xr
@@ -31,17 +34,25 @@ Attributes:
     crs_wkt:   PROJCRS["NAD83(HARN) / North Carolina",BASEGEOGCRS["NAD83(HARN...
 ```
 
-You can choose which map you want to load with the `raster`, `raster_3d`, `strds` and `str3ds` parameters to `open_dataset`.
+You can choose which maps you want to load with the `raster`, `raster_3d`, `strds` and `str3ds` parameters to `open_dataset`.
 Those accept either a single string or an iterable.
+If none of those are specified, the whole mapset will be loaded, ignoring single maps that are already registered in either a `strds` or `str3ds`;
+those maps will be loaded into the Xarray Dataset for being part of the GRASS Space Time Dataset.
+As of version 0.2.0, any time-stamp associated to a single map not registered in a stds is ignored.
 
-If run from outside a GRASS session, the tool will automatically create a session in the requested project and mapset.
+The extent and resolution of the resulting `Dataset` is defined by the region setting of GRASS, set with the `g.region` GRASS tool.
+Note that in GRASS the 3D resolution is independent from the 2D resolution.
+Therefore, 2D and 3D maps loaded in Xarray will not share the same dimensions and coordinates.
+The coordinates in the Xarray `Dataset` correspond to the center of the GRASS cell.
+
+If run from outside a GRASS session, `xarray-grass` will automatically create a session in the requested project and mapset.
 If run from within GRASS, only maps from accessible mapsets could be loaded.
 In GRASS, you can list the accessible mapsets with `g.mapsets`.
 
 
 ## Roadmap
 
-### Version 1.0 goal
+### Version 1.0 goals
 
 - [x] Load a single raster map
 - [x] Load a single Space-time Raster Dataset (strds)
@@ -50,9 +61,10 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 - [x] Load a combination of all the above
 - [x] Load a full mapset
 - [x] Support for the `drop_variables` parameter
-- [ ] Lazy loading of all raster types
 - [ ] Write from xarray to GRASS
+- [ ] Lazy loading of all raster types
 
 ### Stretch goals
 
-- [ ] Load a full GRASS project (ex location)
+- [ ] Load all mapsets from a GRASS project (ex location)
+- [ ] fdg
