@@ -1,7 +1,7 @@
 # xarray-grass
 
-![PyPI - Version](https://img.shields.io/pypi/v/xarray-grass?label=pypi%20package)
-![PyPI - Downloads](https://img.shields.io/pypi/dm/xarray-grass)
+[![PyPI - Version](https://img.shields.io/pypi/v/xarray-grass?label=pypi%20package)](https://pypi.org/project/xarray-grass/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/xarray-grass)](https://pypistats.org/packages/xarray-grass)
 [![tests](https://github.com/lrntct/xarray-grass/actions/workflows/tests.yml/badge.svg)](https://github.com/lrntct/xarray-grass/actions/workflows/tests.yml)
 
 A [GRASS](https://grass.osgeo.org/) backend for [Xarray](https://xarray.dev/).
