@@ -67,4 +67,3 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 ### Stretch goals
 
 - [ ] Load all mapsets from a GRASS project (ex location)
-- [ ] fdg
