@@ -15,6 +15,7 @@ requires-python = ">=3.11"
 dependencies = [
     "grass-session>=0.5",
     "numpy>=2.2.5",
+    "pyproj>=3.7.1",
     "xarray>=2025.4.0",
 ]
 classifiers = [
@@ -37,6 +38,7 @@ Issues = "https://github.com/lrntct/xarray-grass/issues"
 
 [dependency-groups]
 dev = [
+    "pandas>=2.2.3",
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "pytest-random-order>=1.1.1",

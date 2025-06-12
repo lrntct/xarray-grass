@@ -1,3 +1,18 @@
+# coding=utf8
+"""
+Copyright (C) 2025 Laurent Courty
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+"""
+
 from pathlib import Path
 import os
 
@@ -26,6 +41,38 @@ def test_dir_is_grass_project(grass_session_fixture, temp_gisdb):
     assert not dir_is_grass_project("not a project")
     assert not dir_is_grass_project(Path("not a project"))
     assert not dir_is_grass_project([list, dict])  # Nonsensical input
+
+
+def test_dir_is_grass_project_manual_structure(tmp_path: Path):
+    # Case 1: Valid project structure
+    valid_project = tmp_path / "my_grass_location"
+    valid_project.mkdir()
+    (valid_project / "PERMANENT").mkdir()
+    assert dir_is_grass_project(valid_project)
+    assert dir_is_grass_project(str(valid_project))
+
+    # Case 2: Directory exists, but no PERMANENT subdir
+    no_permanent_dir = tmp_path / "not_a_location"
+    no_permanent_dir.mkdir()
+    assert not dir_is_grass_project(no_permanent_dir)
+
+    # Case 3: Directory exists, PERMANENT exists but is a file
+    permanent_is_file_dir = tmp_path / "permanent_is_file"
+    permanent_is_file_dir.mkdir()
+    (permanent_is_file_dir / "PERMANENT").touch()
+    assert not dir_is_grass_project(permanent_is_file_dir)
+
+    # Case 4: Path is a file, not a directory
+    file_path = tmp_path / "some_file.txt"
+    file_path.touch()
+    assert not dir_is_grass_project(file_path)
+
+    # Case 5: Path does not exist
+    non_existent_path = tmp_path / "does_not_exist"
+    assert not dir_is_grass_project(non_existent_path)
+
+    # Case 6: Path is None (dir_is_grass_project handles TypeError from Path(None) and returns False)
+    assert not dir_is_grass_project(None)
 
 
 def test_dir_is_grass_mapset(grass_session_fixture, temp_gisdb):

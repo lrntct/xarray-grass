@@ -1,3 +1,18 @@
+# coding=utf8
+"""
+Copyright (C) 2025 Laurent Courty
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+"""
+
 from collections import namedtuple
 from datetime import datetime
 
@@ -92,12 +107,6 @@ class TestGrassInterface:
         assert grass_i.name_is_raster("not_a_real_map@PERMANENT") is False
         assert grass_i.name_is_raster("not_a_real_map@NOT_A_MAPSET") is False
         assert grass_i.name_is_raster("not_a_real_map") is False
-
-    def test_get_proj_str(self):
-        proj_str = GrassInterface.get_proj_str()
-        ref_str = gs.read_command("g.proj", flags="jf")
-        assert proj_str == ref_str.replace("\n", "")
-        assert isinstance(proj_str, str)
 
     def test_get_crs_wkt_str(self):
         crs_str = GrassInterface.get_crs_wkt_str()

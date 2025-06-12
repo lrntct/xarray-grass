@@ -1,3 +1,18 @@
+# coding=utf8
+"""
+Copyright (C) 2025 Laurent Courty
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+"""
+
 import os
 from collections import namedtuple
 from dataclasses import dataclass
@@ -172,10 +187,6 @@ class GrassInterface(object):
         """return True if the given name is a 3D raster in the grass database."""
         map_id = self.get_id_from_name(raster3d_name)
         return bool(gs.find_file(name=map_id, element="raster_3d").get("file"))
-
-    @staticmethod
-    def get_proj_str() -> str:
-        return gs.read_command("g.proj", flags="jf").replace("\n", "")
 
     @staticmethod
     def get_crs_wkt_str() -> str:
