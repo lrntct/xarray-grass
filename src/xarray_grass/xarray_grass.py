@@ -121,8 +121,8 @@ def dir_is_grass_mapset(filename_or_obj: str | Path) -> bool:
         return False
     if dirpath.is_dir():
         wind_file = dirpath / Path("WIND")
-        var_file = dirpath / Path("VAR")
-        if wind_file.exists() and var_file.exists():
+        # A newly created mapset might only have WIND, VAR appears later.
+        if wind_file.exists():
             return True
     return False
 

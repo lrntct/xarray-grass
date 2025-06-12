@@ -19,10 +19,7 @@ from typing import Mapping
 
 from pyproj import CRS
 import xarray as xr
-
-# import numpy as np
 import grass_session  # noqa: F401
-import grass.script as gs
 
 from xarray_grass.grass_interface import GrassInterface
 from xarray_grass.xarray_grass import dir_is_grass_mapset, dir_is_grass_project
@@ -95,22 +92,48 @@ def to_grass(
     project_name = mapset_path.parent.stem
     project_path = mapset_path.parent
     gisdb = project_path.parent
-    if mapset_path.is_dir() and not dir_is_grass_mapset(mapset_path):
-        raise ValueError(f"{mapset} is not a valid GRASS mapset.")
-    if not mapset_path.is_dir() and not dir_is_grass_project(project_path):
+    if mapset_path.is_file():
+        raise ValueError(f"Mapset path '{mapset_path}' is a file, not a directory.")
+
+    # Prioritize check for create=False with a non-existent mapset
+    if not mapset_path.is_dir() and not create:
         raise ValueError(
-            f"{mapset} not found and {project_path} is not a valid GRASS project."
-        )
-    # if the path is not a mapset, create one
-    if not mapset_path.is_dir() and dir_is_grass_project(project_path) and create:
-        gs.run_command(
-            "g.mapset", mapset=mapset_path.name, project=project_name, flags="c"
+            f"Mapset path '{mapset_path}' is not a valid directory and create is False."
         )
 
+    if mapset_path.is_dir() and not dir_is_grass_mapset(mapset_path):
+        raise ValueError(
+            f"Path '{mapset_path}' exists but is not a valid GRASS mapset."
+        )
+
+    # This check is for when mapset doesn't exist AND create is True (or default True)
+    # but the parent is not a GRASS project.
+    if not mapset_path.is_dir() and create and not dir_is_grass_project(project_path):
+        raise ValueError(
+            f"Mapset '{mapset_path}' not found and its parent directory "
+            f"'{project_path}' is not a valid GRASS project."
+        )
+
+    # if the path is not a mapset (but parent is a project and create is True)
+    if not mapset_path.is_dir() and dir_is_grass_project(project_path) and create:
+        # gs.run_command(
+        #     "g.mapset", mapset=mapset_path.name, project=project_name, flags="c"
+        # )
+        pass  # Skip until grass 8.5
+
     # set the dimensions dict
-    if dims:
-        filtered_user_dims = {k: v for k, v in dims.items() if k in default_dims}
-        dims = default_dims.copy().update(filtered_user_dims)
+    if dims is not None:
+        if not isinstance(dims, Mapping):
+            raise TypeError("dims parameter must be a mapping (e.g., a dictionary).")
+        # Start with a copy of defaults, then update with valid user-provided dims
+        processed_dims = default_dims.copy()
+        for k, v in dims.items():
+            if k not in default_dims:
+                # Optionally, raise an error or warning for unrecognized dim keys
+                # For now, just ignore them to match previous filtering logic
+                continue
+            processed_dims[k] = v
+        dims = processed_dims
     else:
         # Use default dimension names if not provided
         dims = default_dims.copy()
