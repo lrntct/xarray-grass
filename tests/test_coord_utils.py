@@ -41,17 +41,17 @@ def test_get_region_from_xarray_2d_xy():
     expected_s = y_coords[0] - expected_nsres / 2
     expected_n = y_coords[-1] + expected_nsres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["ewres"] == pytest.approx(expected_ewres)
-    assert region["nsres"] == pytest.approx(expected_nsres)
-    assert region["t"] is None
-    assert region["b"] is None
-    assert region["ewres3"] is None
-    assert region["nsres3"] is None
-    assert region["tbres"] is None
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres == pytest.approx(expected_nsres)
+    assert region.t is None
+    assert region.b is None
+    assert region.ewres3 is None
+    assert region.nsres3 is None
+    assert region.tbres is None
 
 
 def test_get_region_from_xarray_2d_latlon():
@@ -74,17 +74,17 @@ def test_get_region_from_xarray_2d_latlon():
     expected_s = lat_coords[0] - expected_nsres / 2
     expected_n = lat_coords[-1] + expected_nsres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["ewres"] == pytest.approx(expected_ewres)
-    assert region["nsres"] == pytest.approx(expected_nsres)
-    assert region["t"] is None
-    assert region["b"] is None
-    assert region["ewres3"] is None
-    assert region["nsres3"] is None
-    assert region["tbres"] is None
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres == pytest.approx(expected_nsres)
+    assert region.t is None
+    assert region.b is None
+    assert region.ewres3 is None
+    assert region.nsres3 is None
+    assert region.tbres is None
 
 
 def test_get_region_from_xarray_2d_latlon_descending_lat():
@@ -108,12 +108,12 @@ def test_get_region_from_xarray_2d_latlon_descending_lat():
     expected_s = lat_coords[-1] - expected_nsres / 2
     expected_n = lat_coords[0] + expected_nsres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["ewres"] == pytest.approx(expected_ewres)
-    assert region["nsres"] == pytest.approx(expected_nsres)
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres == pytest.approx(expected_nsres)
 
 
 def test_get_region_from_xarray_3d_xyz():
@@ -140,21 +140,15 @@ def test_get_region_from_xarray_3d_xyz():
     expected_b = z_coords[0] - expected_tbres / 2
     expected_t = z_coords[-1] + expected_tbres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["b"] == pytest.approx(expected_b)
-    assert region["t"] == pytest.approx(expected_t)
-    assert region["ewres"] == pytest.approx(
-        expected_ewres3
-    )  # 2D res should also be populated
-    assert region["nsres"] == pytest.approx(
-        expected_nsres3
-    )  # 2D res should also be populated
-    assert region["ewres3"] == pytest.approx(expected_ewres3)
-    assert region["nsres3"] == pytest.approx(expected_nsres3)
-    assert region["tbres"] == pytest.approx(expected_tbres)
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.b == pytest.approx(expected_b)
+    assert region.t == pytest.approx(expected_t)
+    assert region.ewres3 == pytest.approx(expected_ewres3)
+    assert region.nsres3 == pytest.approx(expected_nsres3)
+    assert region.tbres == pytest.approx(expected_tbres)
 
 
 def test_get_region_from_xarray_3d_latlonz():
@@ -185,17 +179,15 @@ def test_get_region_from_xarray_3d_latlonz():
     expected_b = z_coords[0] - expected_tbres / 2
     expected_t = z_coords[-1] + expected_tbres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["b"] == pytest.approx(expected_b)
-    assert region["t"] == pytest.approx(expected_t)
-    assert region["ewres"] == pytest.approx(expected_ewres3)
-    assert region["nsres"] == pytest.approx(expected_nsres3)
-    assert region["ewres3"] == pytest.approx(expected_ewres3)
-    assert region["nsres3"] == pytest.approx(expected_nsres3)
-    assert region["tbres"] == pytest.approx(expected_tbres)
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.b == pytest.approx(expected_b)
+    assert region.t == pytest.approx(expected_t)
+    assert region.ewres3 == pytest.approx(expected_ewres3)
+    assert region.nsres3 == pytest.approx(expected_nsres3)
+    assert region.tbres == pytest.approx(expected_tbres)
 
 
 def test_get_region_from_xarray_missing_coord():
@@ -211,17 +203,17 @@ def test_get_region_from_xarray_missing_coord():
     dims_map = default_dims.copy()  # 'y' will be in dims_map but not in da.coords
     region = get_region_from_xarray(da, dims_map)
 
-    assert region["w"] is None
-    assert region["e"] is None
-    assert region["s"] is None
-    assert region["n"] is None
-    assert region["ewres"] is None
-    assert region["nsres"] is None  # y-resolution should be None
-    assert region["t"] is None
-    assert region["b"] is None
-    assert region["ewres3"] is None
-    assert region["nsres3"] is None
-    assert region["tbres"] is None
+    assert region.w is None
+    assert region.e is None
+    assert region.s is None
+    assert region.n is None
+    assert region.ewres is None
+    assert region.nsres is None  # y-resolution should be None
+    assert region.t is None
+    assert region.b is None
+    assert region.ewres3 is None
+    assert region.nsres3 is None
+    assert region.tbres is None
 
 
 def test_get_region_from_xarray_single_point_coord():
@@ -244,17 +236,17 @@ def test_get_region_from_xarray_single_point_coord():
     # or they could be y_coords[0] +/- a default small value if resolution is None.
     # The function currently sets them to None if res is None.
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] is None  # Since nsres will be None
-    assert region["n"] is None  # Since nsres will be None
-    assert region["ewres"] == pytest.approx(expected_ewres)
-    assert region["nsres"] is None  # Resolution for single point coord is None
-    assert region["t"] is None
-    assert region["b"] is None
-    assert region["ewres3"] is None
-    assert region["nsres3"] is None
-    assert region["tbres"] is None
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s is None  # Since nsres will be None
+    assert region.n is None  # Since nsres will be None
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres is None  # Resolution for single point coord is None
+    assert region.t is None
+    assert region.b is None
+    assert region.ewres3 is None
+    assert region.nsres3 is None
+    assert region.tbres is None
 
 
 def test_get_region_from_xarray_custom_dim_names():
@@ -284,9 +276,9 @@ def test_get_region_from_xarray_custom_dim_names():
     expected_s = custom_y_coords[0] - expected_nsres / 2
     expected_n = custom_y_coords[-1] + expected_nsres / 2
 
-    assert region["w"] == pytest.approx(expected_w)
-    assert region["e"] == pytest.approx(expected_e)
-    assert region["s"] == pytest.approx(expected_s)
-    assert region["n"] == pytest.approx(expected_n)
-    assert region["ewres"] == pytest.approx(expected_ewres)
-    assert region["nsres"] == pytest.approx(expected_nsres)
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres == pytest.approx(expected_nsres)

@@ -30,6 +30,10 @@ import grass.pygrass.utils as gutils
 from grass.pygrass import raster as graster
 import grass.temporal as tgis
 
+from xarray_grass.coord_utils import (
+    region_type_dict,
+    RegionData,
+)
 
 gs.core.set_raise_on_error(True)
 
@@ -105,32 +109,47 @@ class GrassInterface(object):
     def get_region() -> namedtuple:
         """Return the current GRASS region."""
         region_raw = gs.parse_command("g.region", flags="g3")
-        type_dict = {
-            "projection": str,
-            "zone": str,
-            "n": float,
-            "s": float,
-            "w": float,
-            "e": float,
-            "t": float,
-            "b": float,
-            "nsres": float,
-            "nsres3": float,
-            "ewres": float,
-            "ewres3": float,
-            "tbres": float,
-            "rows": int,
-            "rows3": int,
-            "cols": int,
-            "cols3": int,
-            "depths": int,
-            "cells": int,
-            "cells3": int,
+
+        region = {
+            k: region_type_dict[k](v) for k, v in region_raw.items() if v is not None
         }
-        RegionData = namedtuple("RegionData", region_raw.keys())
-        region = {k: type_dict[k](v) for k, v in region_raw.items() if v is not None}
         region = RegionData(**region)
         return region
+
+    @staticmethod
+    def set_region(region_data: RegionData) -> None:
+        # 2D region
+        if region_data.tbres is None:
+            gs.run_command(
+                "g.region",
+                flags="o",
+                n=region_data.n,
+                s=region_data.s,
+                e=region_data.e,
+                w=region_data.w,
+                nsres=region_data.nsres,
+                ewres=region_data.ewres,
+            )
+        # 3D region
+        else:
+            # TODO: remove when grass 8.5 is released
+            if region_data.nsres3 != region_data.ewres3:
+                raise ValueError("ewres3 and nsres3 must be equal.")
+            gs.run_command(
+                "g.region",
+                n=region_data.n,
+                s=region_data.s,
+                e=region_data.e,
+                w=region_data.w,
+                t=region_data.t,
+                b=region_data.b,
+                nsres=region_data.nsres,
+                ewres=region_data.ewres,
+                res3=region_data.nsres3,
+                # nsres3=region_data.nsres3,
+                # ewres3=region_data.ewres3,
+                tbres=region_data.tbres,
+            )
 
     @staticmethod
     def is_latlon():

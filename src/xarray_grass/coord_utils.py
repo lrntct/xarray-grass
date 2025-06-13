@@ -13,41 +13,39 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
+from collections import namedtuple
 from typing import Mapping
 import numpy as np
 import xarray as xr  # For type hinting xr.DataArray
-from xarray_grass.grass_interface import GrassInterface
 
 
-def get_coordinates(grass_i: GrassInterface, raster_3d: bool) -> dict:
-    """return xarray coordinates from GRASS region."""
-    current_region = grass_i.get_region()
-    lim_e = current_region.e
-    lim_w = current_region.w
-    lim_n = current_region.n
-    lim_s = current_region.s
-    lim_t = current_region.t
-    lim_b = current_region.b
-    dz = current_region.tbres
-    if raster_3d:
-        dx = current_region.ewres3
-        dy = current_region.nsres3
-    else:
-        dx = current_region.ewres
-        dy = current_region.nsres
-    # GRASS limits are at the edge of the region.
-    # In the exported DataArray, coordinates are at the center of the cell
-    # Stop not changed to include it in the range
-    start_w = lim_w + dx / 2
-    stop_e = lim_e
-    start_s = lim_s + dy / 2
-    stop_n = lim_n
-    start_b = lim_b + dz / 2
-    stop_t = lim_t
-    x_coords = np.arange(start=start_w, stop=stop_e, step=dx, dtype=np.float32)
-    y_coords = np.arange(start=start_s, stop=stop_n, step=dy, dtype=np.float32)
-    z_coords = np.arange(start=start_b, stop=stop_t, step=dz, dtype=np.float32)
-    return {"x": x_coords, "y": y_coords, "z": z_coords}
+region_type_dict = {
+    "projection": str,
+    "zone": str,
+    "n": float,
+    "s": float,
+    "w": float,
+    "e": float,
+    "t": float,
+    "b": float,
+    "nsres": float,
+    "nsres3": float,
+    "ewres": float,
+    "ewres3": float,
+    "tbres": float,
+    "rows": int,
+    "rows3": int,
+    "cols": int,
+    "cols3": int,
+    "depths": int,
+    "cells": int,
+    "cells3": int,
+}
+RegionData = namedtuple(
+    "RegionData",
+    region_type_dict.keys(),
+    defaults=[None for _ in region_type_dict.keys()],
+)
 
 
 def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) -> dict:
@@ -84,19 +82,7 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         'tbres': float or None (3D vertical resolution)
         Values can be None if not applicable or cannot be determined.
     """
-    region = {
-        "n": None,
-        "s": None,
-        "e": None,
-        "w": None,
-        "t": None,
-        "b": None,
-        "nsres": None,
-        "ewres": None,
-        "nsres3": None,
-        "ewres3": None,
-        "tbres": None,
-    }
+    region = {}
 
     def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
         if coords_arr_np is not None and len(coords_arr_np) >= 2:
@@ -146,10 +132,6 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         region["ewres3"] = ewres_3d
         region["nsres3"] = nsres_3d
         region["tbres"] = tbres_3d
-        # For 3D, also populate the 2D resolution fields.
-        # GRASS often expects 2D res even for 3D regions.
-        region["ewres"] = ewres_3d
-        region["nsres"] = nsres_3d
 
     else:  # 2D case
         lon_name = dims.get("longitude")
@@ -213,4 +195,4 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         region["b"] = float(z_coords_np[0] - region["tbres"] / 2)
         region["t"] = float(z_coords_np[-1] + region["tbres"] / 2)
 
-    return region
+    return RegionData(**region)

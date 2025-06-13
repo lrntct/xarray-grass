@@ -15,6 +15,7 @@ GNU General Public License for more details.
 
 from collections import namedtuple
 from datetime import datetime
+from copy import deepcopy
 
 import pytest
 import numpy as np
@@ -24,7 +25,7 @@ import grass_session  # noqa: F401
 import grass.script as gs
 import grass.exceptions as gexceptions
 
-from xarray_grass import GrassInterface
+from xarray_grass import GrassInterface, RegionData
 
 
 ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
@@ -67,6 +68,60 @@ class TestGrassInterface:
         assert region.n > region.s
         assert region.e > region.w
         assert region.t > region.b
+
+    @pytest.fixture
+    def temp_2d_region(self, grass_i):
+        region_before = deepcopy(grass_i.get_region())
+        valid_data = RegionData(
+            n=150.4,
+            s=30.4,
+            w=-12.3,
+            e=150.9,
+            nsres=20,
+            ewres=23.3,
+        )
+        grass_i.set_region(valid_data)
+        yield valid_data
+        grass_i.set_region(region_before)
+
+    def test_set_region_2D(self, grass_i, temp_2d_region):
+        region = grass_i.get_region()
+        assert region.n == pytest.approx(temp_2d_region.n)
+        assert region.s == pytest.approx(temp_2d_region.s)
+        assert region.w == pytest.approx(temp_2d_region.w)
+        assert region.e == pytest.approx(temp_2d_region.e)
+        assert region.nsres == pytest.approx(temp_2d_region.nsres, abs=1e-3)
+        assert region.ewres == pytest.approx(temp_2d_region.ewres, abs=1e-1)
+
+    @pytest.fixture
+    def temp_3d_region(self, grass_i):
+        region_before = deepcopy(grass_i.get_region())
+        valid_data = RegionData(
+            n=150.4,
+            s=30.4,
+            w=-12.3,
+            e=150.9,
+            nsres=20,
+            ewres=23.3,
+            t=1000.0,
+            b=0.0,
+            tbres=10.0,
+        )
+        grass_i.set_region(valid_data)
+        yield valid_data
+        grass_i.set_region(region_before)
+
+    def test_set_region_3D(self, grass_i, temp_3d_region):
+        region = grass_i.get_region()
+        assert region.n == pytest.approx(temp_3d_region.n)
+        assert region.s == pytest.approx(temp_3d_region.s)
+        assert region.w == pytest.approx(temp_3d_region.w)
+        assert region.e == pytest.approx(temp_3d_region.e)
+        assert region.nsres == pytest.approx(temp_3d_region.nsres, abs=1e-3)
+        assert region.ewres == pytest.approx(temp_3d_region.ewres, abs=1e-1)
+        assert region.t == pytest.approx(temp_3d_region.t)
+        assert region.b == pytest.approx(temp_3d_region.b)
+        assert region.tbres == pytest.approx(temp_3d_region.tbres, abs=1e-3)
 
     def test_is_latlon(self):
         assert GrassInterface.is_latlon() is False
