@@ -163,7 +163,6 @@ class TestToGrassSuccess:
                 quiet=True,
             )
             # The main gisdb is cleaned up by the temp_gisdb fixture.
-            # Removing mapsets individually can be complex if GRASS holds locks.
 
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])

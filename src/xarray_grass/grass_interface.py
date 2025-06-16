@@ -345,7 +345,6 @@ class GrassInterface(object):
         return array
 
     def write_raster_map(self, arr: np.ndarray, rast_name: str) -> Self:
-        mtype: str = self.grass_dtype(arr.dtype)
         region = self.get_region()
         region_shape = (region.rows, region.cols)
         if region_shape != arr.shape:
@@ -353,14 +352,10 @@ class GrassInterface(object):
                 f"Cannot write an array of shape {arr.shape} into "
                 f"a GRASS region of size {region_shape}"
             )
-        with graster.RasterRow(
-            rast_name, mode="w", mtype=mtype, overwrite=self.overwrite
-        ) as newraster:
-            newrow = graster.Buffer((arr.shape[1],), mtype=mtype)
-            for row in arr:
-                newrow[:] = row[:]
-                newraster.put_row(newrow)
-
+        # Write with array interface
+        map2d = garray.array(dtype=arr.dtype)
+        map2d[:] = arr
+        map2d.write(mapname=rast_name, overwrite=self.overwrite)
         return self
 
     def register_maps_in_stds(
