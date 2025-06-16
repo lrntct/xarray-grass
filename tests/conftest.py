@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 
 import requests
 import pytest
+import xarray as xr
+import numpy as np
+import pandas as pd
 import grass_session
 import grass.script as gs
 import grass.temporal as tgis
@@ -168,3 +171,139 @@ def gen_str3ds(
         unit=time_unit,
     )
     return stds
+
+
+def create_sample_dataarray(
+    dims_spec: dict,
+    shape: tuple,
+    crs_wkt: str,
+    name: str = "test_data",
+    use_latlon_dims: bool = False,
+    time_dim_type: str = "absolute",  # "absolute", "relative", or "none"
+    fill_value_generator=None,
+) -> xr.DataArray:
+    """
+    Creates a sample xr.DataArray for testing.
+
+    dims_spec: Dict mapping dimension names to their coordinate values.
+               The keys should be the standard names ('time', 'z', 'y', 'x') and
+               will be translated to 'latitude', 'longitude', 'y_3d', 'x_3d'
+               based on use_latlon_dims and context (2D vs 3D).
+               The order of keys in dims_spec must match the desired final
+               dimension order of the DataArray and the order in `shape`.
+               Example: {'time': pd.date_range(...), 'y': np.arange(...), ...}
+    shape: Tuple defining the shape of the data array, matching the order of dims_spec.
+    crs_wkt: WKT string for the crs_wkt attribute.
+    name: Name of the xr.DataArray.
+    use_latlon_dims: If True, spatial dimensions will be named 'latitude'/'longitude'
+                     (and '_3d' versions). Otherwise 'x'/'y'.
+    time_dim_type: If 'time' in dims_spec, specifies if time is 'absolute'
+                   (datetime objects) or 'relative' (numeric).
+    fill_value_generator: Function to generate data, e.g., lambda s: np.random.rand(*s).
+                          If None, uses np.random.rand(*shape).
+    """
+    if fill_value_generator is None:
+        data = np.random.rand(*shape)
+    else:
+        data = fill_value_generator(shape)
+
+    coords = {}
+    actual_dims_ordered = []  # This will store the final dimension names in the correct order
+
+    # Define standard internal keys expected in dims_spec
+    # These will be mapped to actual_dim_names based on context
+
+    # Determine context for spatial dimension naming (2D or 3D)
+    is_3d_spatial_context = "z" in dims_spec
+
+    for dim_key in dims_spec.keys():  # Iterate in the order provided by dims_spec
+        coord_values = dims_spec[dim_key]
+        actual_dim_name = dim_key  # Default to key
+
+        if dim_key == "time":
+            if time_dim_type == "absolute":
+                coords[actual_dim_name] = pd.to_datetime(coord_values)
+            else:  # relative or none
+                coords[actual_dim_name] = coord_values
+        elif dim_key == "z":
+            actual_dim_name = "z"  # Standard name
+            coords[actual_dim_name] = coord_values
+        elif dim_key == "y":
+            if is_3d_spatial_context:
+                actual_dim_name = "latitude_3d" if use_latlon_dims else "y_3d"
+            else:  # 2D
+                actual_dim_name = "latitude" if use_latlon_dims else "y"
+            coords[actual_dim_name] = coord_values
+        elif dim_key == "x":
+            if is_3d_spatial_context:
+                actual_dim_name = "longitude_3d" if use_latlon_dims else "x_3d"
+            else:  # 2D
+                actual_dim_name = "longitude" if use_latlon_dims else "x"
+            coords[actual_dim_name] = coord_values
+        else:  # Other dimensions (e.g., custom, non-spatial, non-temporal)
+            coords[actual_dim_name] = coord_values
+
+        actual_dims_ordered.append(actual_dim_name)
+
+    if len(actual_dims_ordered) != len(shape):
+        raise ValueError(
+            f"Number of dimensions derived from dims_spec ({len(actual_dims_ordered)}) "
+            f"does not match length of shape ({len(shape)}). "
+            f"Ensure dims_spec keys are ordered correctly: {list(dims_spec.keys())} vs {actual_dims_ordered}"
+        )
+
+    da = xr.DataArray(
+        data,
+        coords=coords,
+        dims=actual_dims_ordered,
+        name=name,
+    )
+    da.attrs["crs_wkt"] = crs_wkt
+    return da
+
+
+def create_sample_dataset(
+    data_vars_specs: dict,
+    crs_wkt: str,
+    global_use_latlon_dims: bool = False,
+    global_time_dim_type: str = "absolute",
+) -> xr.Dataset:
+    """
+    Creates a sample xr.Dataset for testing.
+
+    data_vars_specs: Dict where keys are variable names and values are dicts
+                     of parameters for create_sample_dataarray (dims_spec, shape, name,
+                     optionally use_latlon_dims, time_dim_type, fill_value_generator).
+                     The 'dims_spec' within each variable's spec should follow the
+                     ordering and naming conventions for create_sample_dataarray.
+    crs_wkt: WKT string for the crs_wkt attribute of the dataset and its DataArrays.
+    global_use_latlon_dims: Default for use_latlon_dims if not in var_spec.
+    global_time_dim_type: Default for time_dim_type if not in var_spec.
+    """
+    data_vars = {}
+    for var_name, spec in data_vars_specs.items():
+        # Ensure required keys are present in spec
+        if not all(k in spec for k in ["dims_spec", "shape"]):
+            raise ValueError(
+                f"Variable spec for '{var_name}' is missing 'dims_spec' or 'shape'."
+            )
+
+        dims_spec = spec["dims_spec"]
+        shape = spec["shape"]
+        da_name = spec.get("name", var_name)
+        use_latlon = spec.get("use_latlon_dims", global_use_latlon_dims)
+        time_type = spec.get("time_dim_type", global_time_dim_type)
+        fill_gen = spec.get("fill_value_generator", None)
+
+        data_vars[var_name] = create_sample_dataarray(
+            dims_spec=dims_spec,
+            shape=shape,
+            crs_wkt=crs_wkt,
+            name=da_name,
+            use_latlon_dims=use_latlon,
+            time_dim_type=time_type,
+            fill_value_generator=fill_gen,
+        )
+    ds = xr.Dataset(data_vars)
+    ds.attrs["crs_wkt"] = crs_wkt
+    return ds

@@ -23,7 +23,8 @@ import grass_session  # noqa: F401
 
 from xarray_grass.grass_interface import GrassInterface
 from xarray_grass.xarray_grass import dir_is_grass_mapset, dir_is_grass_project
-# from xarray_grass.coord_utils import get_region_from_xarray
+from xarray_grass.coord_utils import get_region_from_xarray
+
 
 # Default dimension names
 default_dims = {
@@ -269,28 +270,25 @@ def datarray_to_grass(
         f"DataArray {data.name} does not match any supported GRASS dataset type. "
         f"Expected 2D, 3D, STRDS, or STR3DS."
     )
+    # Set temp region
+    current_region = gi.get_region()
+    temp_region = get_region_from_xarray(data, dims)
+    gi.set_region(temp_region)
 
-    if is_raster or is_strds:
-        # set region
-        pass
-    elif is_raster_3d or is_str3ds:
-        # set 3D region
-        pass
-    else:
-        raise ValueError(error_msg)
-
-    if is_raster:
-        # write raster map
-        pass
-    elif is_strds:
-        # write STRDS
-        pass
-    elif is_raster_3d:
-        # write raster 3D map
-        pass
-    elif is_str3ds:
-        # write STR3DS
-        pass
-    else:
-        # This should have been catch before
-        raise ValueError(error_msg)
+    try:
+        if is_raster:
+            gi.write_raster_map(data, data.name)
+        elif is_strds:
+            # write STRDS
+            pass
+        elif is_raster_3d:
+            # write raster 3D map
+            pass
+        elif is_str3ds:
+            # write STR3DS
+            pass
+        else:
+            raise ValueError(error_msg)
+    finally:
+        # Restore the original region
+        gi.set_region(current_region)

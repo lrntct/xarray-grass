@@ -14,155 +14,17 @@ GNU General Public License for more details.
 """
 
 from pathlib import Path
-import tempfile
 
 import pandas as pd
-import xarray as xr
 import numpy as np
 import pytest
-from pyproj import CRS
 import grass_session  # noqa: F401
 import grass.script as gs
 
 
 from xarray_grass import to_grass
-from xarray_grass import GrassInterface  # For type hinting grass_i fixture
-
-
-def create_sample_dataarray(
-    dims_spec: dict,
-    shape: tuple,
-    crs_wkt: str,
-    name: str = "test_data",
-    use_latlon_dims: bool = False,
-    time_dim_type: str = "absolute",  # "absolute", "relative", or "none"
-    fill_value_generator=None,
-) -> xr.DataArray:
-    """
-    Creates a sample xr.DataArray for testing.
-
-    dims_spec: Dict mapping dimension names to their coordinate values.
-               The keys should be the standard names ('time', 'z', 'y', 'x') and
-               will be translated to 'latitude', 'longitude', 'y_3d', 'x_3d'
-               based on use_latlon_dims and context (2D vs 3D).
-               The order of keys in dims_spec must match the desired final
-               dimension order of the DataArray and the order in `shape`.
-               Example: {'time': pd.date_range(...), 'y': np.arange(...), ...}
-    shape: Tuple defining the shape of the data array, matching the order of dims_spec.
-    crs_wkt: WKT string for the crs_wkt attribute.
-    name: Name of the xr.DataArray.
-    use_latlon_dims: If True, spatial dimensions will be named 'latitude'/'longitude'
-                     (and '_3d' versions). Otherwise 'x'/'y'.
-    time_dim_type: If 'time' in dims_spec, specifies if time is 'absolute'
-                   (datetime objects) or 'relative' (numeric).
-    fill_value_generator: Function to generate data, e.g., lambda s: np.random.rand(*s).
-                          If None, uses np.random.rand(*shape).
-    """
-    if fill_value_generator is None:
-        data = np.random.rand(*shape)
-    else:
-        data = fill_value_generator(shape)
-
-    coords = {}
-    actual_dims_ordered = []  # This will store the final dimension names in the correct order
-
-    # Define standard internal keys expected in dims_spec
-    # These will be mapped to actual_dim_names based on context
-
-    # Determine context for spatial dimension naming (2D or 3D)
-    is_3d_spatial_context = "z" in dims_spec
-
-    for dim_key in dims_spec.keys():  # Iterate in the order provided by dims_spec
-        coord_values = dims_spec[dim_key]
-        actual_dim_name = dim_key  # Default to key
-
-        if dim_key == "time":
-            if time_dim_type == "absolute":
-                coords[actual_dim_name] = pd.to_datetime(coord_values)
-            else:  # relative or none
-                coords[actual_dim_name] = coord_values
-        elif dim_key == "z":
-            actual_dim_name = "z"  # Standard name
-            coords[actual_dim_name] = coord_values
-        elif dim_key == "y":
-            if is_3d_spatial_context:
-                actual_dim_name = "latitude_3d" if use_latlon_dims else "y_3d"
-            else:  # 2D
-                actual_dim_name = "latitude" if use_latlon_dims else "y"
-            coords[actual_dim_name] = coord_values
-        elif dim_key == "x":
-            if is_3d_spatial_context:
-                actual_dim_name = "longitude_3d" if use_latlon_dims else "x_3d"
-            else:  # 2D
-                actual_dim_name = "longitude" if use_latlon_dims else "x"
-            coords[actual_dim_name] = coord_values
-        else:  # Other dimensions (e.g., custom, non-spatial, non-temporal)
-            coords[actual_dim_name] = coord_values
-
-        actual_dims_ordered.append(actual_dim_name)
-
-    if len(actual_dims_ordered) != len(shape):
-        raise ValueError(
-            f"Number of dimensions derived from dims_spec ({len(actual_dims_ordered)}) "
-            f"does not match length of shape ({len(shape)}). "
-            f"Ensure dims_spec keys are ordered correctly: {list(dims_spec.keys())} vs {actual_dims_ordered}"
-        )
-
-    da = xr.DataArray(
-        data,
-        coords=coords,
-        dims=actual_dims_ordered,
-        name=name,
-    )
-    da.attrs["crs_wkt"] = crs_wkt
-    return da
-
-
-def create_sample_dataset(
-    data_vars_specs: dict,
-    crs_wkt: str,
-    global_use_latlon_dims: bool = False,
-    global_time_dim_type: str = "absolute",
-) -> xr.Dataset:
-    """
-    Creates a sample xr.Dataset for testing.
-
-    data_vars_specs: Dict where keys are variable names and values are dicts
-                     of parameters for create_sample_dataarray (dims_spec, shape, name,
-                     optionally use_latlon_dims, time_dim_type, fill_value_generator).
-                     The 'dims_spec' within each variable's spec should follow the
-                     ordering and naming conventions for create_sample_dataarray.
-    crs_wkt: WKT string for the crs_wkt attribute of the dataset and its DataArrays.
-    global_use_latlon_dims: Default for use_latlon_dims if not in var_spec.
-    global_time_dim_type: Default for time_dim_type if not in var_spec.
-    """
-    data_vars = {}
-    for var_name, spec in data_vars_specs.items():
-        # Ensure required keys are present in spec
-        if not all(k in spec for k in ["dims_spec", "shape"]):
-            raise ValueError(
-                f"Variable spec for '{var_name}' is missing 'dims_spec' or 'shape'."
-            )
-
-        dims_spec = spec["dims_spec"]
-        shape = spec["shape"]
-        da_name = spec.get("name", var_name)
-        use_latlon = spec.get("use_latlon_dims", global_use_latlon_dims)
-        time_type = spec.get("time_dim_type", global_time_dim_type)
-        fill_gen = spec.get("fill_value_generator", None)
-
-        data_vars[var_name] = create_sample_dataarray(
-            dims_spec=dims_spec,
-            shape=shape,
-            crs_wkt=crs_wkt,
-            name=da_name,
-            use_latlon_dims=use_latlon,
-            time_dim_type=time_type,
-            fill_value_generator=fill_gen,
-        )
-    ds = xr.Dataset(data_vars)
-    ds.attrs["crs_wkt"] = crs_wkt
-    return ds
+from xarray_grass import GrassInterface
+from .conftest import create_sample_dataarray, create_sample_dataset
 
 
 @pytest.mark.usefixtures("grass_session_fixture")
@@ -171,15 +33,16 @@ class TestToGrassSuccess:
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     def test_dataarray_2d_conversion(
         self,
-        temp_gisdb,  # pytest.fixture from conftest.py
-        grass_i: GrassInterface,  # pytest.fixture from conftest.py, type hinted
+        temp_gisdb,
+        grass_i: GrassInterface,
         use_latlon_dims: bool,
         mapset_is_path_obj: bool,
     ):
         """Test conversion of a 2D xr.DataArray to a GRASS Raster."""
+        # If a mask is present, the stats comparison will not be accurate.
+        assert not grass_i.has_mask()
         img_width = 10
         img_height = 12
-
         # Prepare sample DataArray
         if use_latlon_dims:
             # For lat/lon, use linspace to simulate geographic coordinates
@@ -231,67 +94,76 @@ class TestToGrassSuccess:
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         )
         mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
-
-        to_grass(
-            dataset=sample_da,
-            mapset=mapset_arg,
-            create=False,  # Write to existing mapset
+        grass_raster_name_full = (
+            f"{sample_da.name}@{target_mapset_name}"  # Moved and defined
         )
 
-        # No need to assert mapset_path_obj.exists() as PERMANENT always exists
-        # No need to add PERMANENT to g.mapsets
-
-        grass_raster_name_full = f"{sample_da.name}@{target_mapset_name}"
-
-        available_rasters = grass_i.list_raster(mapset=target_mapset_name)
-        assert sample_da.name in available_rasters, (
-            f"Raster '{sample_da.name}' not found in mapset '{target_mapset_name}'. Found: {available_rasters}"
-        )
-
-        info = gs.parse_command(
-            "r.info", map=grass_raster_name_full, flags="g", quiet=True
-        )
-
-        assert int(info["rows"]) == img_height
-        assert int(info["cols"]) == img_width
-
-        # Check data statistics
-        # Ensure data type of xarray DA is float for direct comparison with r.univar output
-        sample_da_float = sample_da.astype(float)
-        univar_stats = gs.parse_command(
-            "r.univar", map=grass_raster_name_full, flags="g", quiet=True
-        )
-
-        # Convert univar stats from string to float, handling "none"
-        for key, value in univar_stats.items():
+        try:
+            to_grass(
+                dataset=sample_da,
+                mapset=mapset_arg,
+                create=False,
+            )
+            available_rasters = grass_i.list_raster(mapset=target_mapset_name)
+            assert grass_raster_name_full in available_rasters, (
+                f"Raster '{grass_raster_name_full}' not found in mapset '{target_mapset_name}'. Found: {available_rasters}"
+            )
+            # Store current region (which is the original/default one from the test session)
+            original_region_for_assertions = grass_i.get_region()
             try:
-                univar_stats[key] = float(value)
-            except ValueError:  # Handles "none" or other non-float strings
-                univar_stats[key] = np.nan
+                gs.run_command(
+                    "g.region", flags="o", raster=grass_raster_name_full, quiet=True
+                )
+                info = gs.parse_command(
+                    "r.info", map=grass_raster_name_full, flags="g", quiet=True
+                )
+                assert int(info["rows"]) == img_height
+                assert int(info["cols"]) == img_width
+                # Check data statistics
+                # Ensure data type of xarray DA is float for direct comparison with r.univar output
+                sample_da_float = sample_da.astype(float)
+                univar_stats = gs.parse_command(
+                    "r.univar", map=grass_raster_name_full, flags="g", quiet=True
+                )
+            finally:
+                # Restore the original region for the test session
+                grass_i.set_region(original_region_for_assertions)
+            # Convert univar stats from string to float, handling "none"
+            for key, value in univar_stats.items():
+                try:
+                    univar_stats[key] = float(value)
+                except ValueError:
+                    univar_stats[key] = np.nan
 
-        assert np.isclose(
-            univar_stats.get("min", np.nan),
-            sample_da_float.min().item(),
-            equal_nan=True,
-        )
-        assert np.isclose(
-            univar_stats.get("max", np.nan),
-            sample_da_float.max().item(),
-            equal_nan=True,
-        )
-        assert np.isclose(
-            univar_stats.get("mean", np.nan),
-            sample_da_float.mean().item(),
-            equal_nan=True,
-        )
+            assert np.isclose(
+                univar_stats.get("min", np.nan),
+                sample_da_float.min().item(),
+                equal_nan=True,
+            )
+            assert np.isclose(
+                univar_stats.get("max", np.nan),
+                sample_da_float.max().item(),
+                equal_nan=True,
+            )
+            assert np.isclose(
+                univar_stats.get("mean", np.nan),
+                sample_da_float.mean().item(),
+                equal_nan=True,
+            )
 
-        # Clean up created mapset to keep tests isolated (optional, good practice)
-        # First, change current mapset to PERMANENT to allow deletion of target_mapset_name
-        # gs.run_command("g.mapset", mapset="PERMANENT", quiet=True)
-        # gs.run_command("g.remove", flags="f", type="mapset", name=target_mapset_name, quiet=True)
-        # The main gisdb is cleaned up by the temp_gisdb fixture.
-        # Removing mapsets individually can be complex if GRASS holds locks.
-        # For now, rely on temp_gisdb fixture for full cleanup.
+        finally:
+            # Clean up created mapset to keep tests isolated
+            # First, change current mapset to PERMANENT to allow deletion of target_mapset_name
+            # gs.run_command("g.mapset", mapset="PERMANENT", quiet=True)
+            gs.run_command(
+                "g.remove",
+                flags="f",
+                type="raster",
+                name=grass_raster_name_full,
+                quiet=True,
+            )
+            # The main gisdb is cleaned up by the temp_gisdb fixture.
+            # Removing mapsets individually can be complex if GRASS holds locks.
 
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
@@ -537,7 +409,7 @@ class TestToGrassSuccess:
 
         time_coords = None
         if time_dim_type == "absolute":
-            time_coords = pd.date_range(start="2024-01-01", periods=num_times, freq="H")
+            time_coords = pd.date_range(start="2024-01-01", periods=num_times, freq="h")
         elif time_dim_type == "relative":
             time_coords = np.arange(1, num_times + 1)
         else:
@@ -1025,261 +897,3 @@ class TestToGrassSuccess:
         assert int(info["cols"]) == img_width
         # No direct way to check if GRASS "knows" about "northing" vs "y" from r.info,
         # the key is that the data from the correct DA dimension was used.
-
-
-@pytest.mark.usefixtures("grass_session_fixture")
-class TestToGrassErrorHandling:
-    def test_missing_crs_wkt_attribute(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error handling when input xarray object is missing 'crs_wkt' attribute."""
-        mapset_name = temp_gisdb.mapset
-        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / mapset_name
-        # Create a DataArray without crs_wkt
-        # The helper function always adds it, so we create one manually here.
-        sample_da_no_crs = xr.DataArray(
-            np.random.rand(2, 2),
-            coords={"y": [0, 1], "x": [0, 1]},
-            dims=("y", "x"),
-            name="data_no_crs",
-        )
-        # Intentionally do not set sample_da_no_crs.attrs["crs_wkt"]
-
-        with pytest.raises(
-            (KeyError, AttributeError, ValueError),
-            match=r"(crs_wkt|CRS mismatch|has no attribute 'attrs')",
-        ):
-            to_grass(dataset=sample_da_no_crs, mapset=str(mapset_path), create=True)
-
-    def test_incompatible_crs_wkt(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error handling with an incompatible 'crs_wkt' attribute."""
-        mapset_name = temp_gisdb.mapset
-        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / mapset_name
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        # Create an incompatible CRS WKT string
-        incompatible_crs = CRS.from_epsg(4326)  # WGS 84
-        if CRS.from_wkt(session_crs_wkt).equals(incompatible_crs):
-            # If by chance the session CRS is compatible, pick another one
-            incompatible_crs = CRS.from_epsg(23032)  # UTM zone 32N, Denmark
-        incompatible_crs_wkt = incompatible_crs.to_wkt()
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=incompatible_crs_wkt,  # Set the incompatible CRS
-            name="data_incompatible_crs",
-        )
-
-        with pytest.raises(
-            ValueError,
-            match=r"CRS mismatch",
-        ):
-            to_grass(dataset=sample_da, mapset=str(mapset_path), create=False)
-
-    def test_invalid_mapset_path_non_existent_parent(
-        self, temp_gisdb, grass_i: GrassInterface
-    ):
-        """Test error with mapset path having a non-existent parent directory."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        # Path to a non-existent directory, then the mapset
-        mapset_path = (
-            Path(temp_gisdb.gisdb)
-            / temp_gisdb.project
-            / "non_existent_parent_dir"
-            / "my_mapset"
-        )
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_invalid_parent",
-        )
-
-        with pytest.raises(
-            ValueError,
-            match=r"Mapset.*not found and its parent directory.*is not a valid GRASS project",
-        ):
-            to_grass(dataset=sample_da, mapset=str(mapset_path), create=True)
-
-    def test_invalid_mapset_path_is_file(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error with mapset path being an existing file."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-
-        # Create an empty file where the mapset directory would be
-        file_as_mapset_path = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / "file_instead_of_mapset"
-        )
-        with open(file_as_mapset_path, "w") as f:
-            f.write("This is a file.")
-
-        assert file_as_mapset_path.is_file()
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_mapset_is_file",
-        )
-
-        with pytest.raises(ValueError, match=r"not a directory"):
-            to_grass(dataset=sample_da, mapset=str(file_as_mapset_path), create=True)
-
-        file_as_mapset_path.unlink()  # Clean up the created file
-
-    def test_parent_dir_not_grass_location(self, grass_i: GrassInterface):
-        """Test error when parent of mapset is not a GRASS Location (create=True)."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-
-        with tempfile.TemporaryDirectory(
-            prefix="not_a_grass_loc_"
-        ) as tmp_non_grass_dir:
-            mapset_path_in_non_grass_loc = Path(tmp_non_grass_dir) / "my_mapset_here"
-
-            sample_da = create_sample_dataarray(
-                dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-                shape=(2, 2),
-                crs_wkt=session_crs_wkt,
-                name="data_non_grass_parent",
-            )
-
-            # This relies on to_grass checking if the parent is a GRASS location.
-            # The exact error message might vary based on implementation.
-            with pytest.raises(
-                ValueError,
-                match=r"(not a valid GRASS project|Parent directory.*not a GRASS location|Invalid GIS database)",
-            ):
-                to_grass(
-                    dataset=sample_da,
-                    mapset=str(mapset_path_in_non_grass_loc),
-                    create=True,
-                )
-
-    def test_create_false_mapset_not_exists(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error when create=False and mapset does not exist."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        non_existent_mapset_path = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / "mapset_does_not_exist_at_all"
-        )
-
-        assert not non_existent_mapset_path.exists()  # Ensure it really doesn't exist
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_create_false_no_mapset",
-        )
-
-        with pytest.raises(
-            ValueError,
-            match=r"is not a valid directory",
-        ):
-            to_grass(
-                dataset=sample_da, mapset=str(non_existent_mapset_path), create=False
-            )
-
-    def test_mapset_not_accessible_simplified(self, grass_i: GrassInterface):
-        """Test simplified 'mapset not accessible' by providing a syntactically valid but unrelated path."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-
-        # A path that is unlikely to be a GRASS mapset accessible to the current session
-        # This doesn't create a separate GRASS session, just uses a bogus path.
-        # The function should ideally detect this isn't a valid mapset within the current GISDB.
-        unrelated_path = "/tmp/some_completely_random_unrelated_path_for_mapset_test"
-        # Ensure it doesn't exist, or the error might be different (e.g. "is a file")
-        if Path(unrelated_path).exists():
-            try:
-                if Path(unrelated_path).is_dir():
-                    import shutil
-
-                    shutil.rmtree(unrelated_path)
-                else:
-                    Path(unrelated_path).unlink()
-            except OSError:
-                pytest.skip(f"Could not clean up unrelated_path: {unrelated_path}")
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_unrelated_mapset_path",
-        )
-
-        # The expected error could be about invalid path, not a GRASS mapset, or not in current GISDB.
-        with pytest.raises(
-            ValueError,
-            match=r"not found and .* is not a valid GRASS project",
-        ):
-            to_grass(dataset=sample_da, mapset=unrelated_path, create=True)
-            to_grass(
-                dataset=sample_da, mapset=unrelated_path, create=False
-            )  # Also test with create=False
-
-
-@pytest.mark.usefixtures("grass_session_fixture")
-class TestToGrassInputValidation:
-    def test_invalid_dataset_type(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error handling for invalid 'dataset' parameter type.
-        That a first try. Let's see how it goes considering that the tested code uses duck typing."""
-        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / temp_gisdb.mapset
-
-        invalid_datasets = [123, "a string", [1, 2, 3], {"data": np.array([1])}, None]
-        for invalid_ds in invalid_datasets:
-            with pytest.raises(
-                AttributeError,
-                match=r"object has no attribute 'attrs'",
-            ):
-                to_grass(dataset=invalid_ds, mapset=str(mapset_path), create=False)
-
-    def test_invalid_dims_parameter_type(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error handling for invalid 'dims' parameter type or content."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        # Use PERMANENT mapset to avoid issues with tgis.init() for newly created mapsets
-        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / temp_gisdb.mapset
-        # No need to create PERMANENT mapset as it's guaranteed by temp_gisdb fixture
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_for_dims_validation",
-        )
-
-        invalid_dims_params = [
-            "not_a_dict",
-            123,
-            ["y", "x"],
-        ]
-        for invalid_dims in invalid_dims_params:
-            with pytest.raises(
-                TypeError,
-                match=r"dims parameter must be a mapping",  # More specific regex
-            ):
-                to_grass(
-                    dataset=sample_da,
-                    mapset=str(mapset_path),
-                    dims=invalid_dims,
-                    create=False,
-                )
-
-    def test_invalid_mapset_parameter_type(self, temp_gisdb, grass_i: GrassInterface):
-        """Test error handling for invalid 'mapset' parameter type."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_for_mapset_type_validation",
-        )
-
-        invalid_mapset_params = [
-            123,
-            None,
-            ["path", "to", "mapset"],
-            {"path": "mapset_dir"},
-        ]
-        for invalid_mapset in invalid_mapset_params:
-            with pytest.raises(
-                TypeError,
-                match=r"(mapset parameter must be a string or a Path|Invalid mapset type|argument should be a str or an os.PathLike object)",
-            ):
-                to_grass(dataset=sample_da, mapset=invalid_mapset, create=True)

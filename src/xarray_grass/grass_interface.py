@@ -120,6 +120,19 @@ class GrassInterface(object):
     def set_region(region_data: RegionData) -> None:
         # 2D region
         if region_data.tbres is None:
+            if not all(
+                [
+                    region_data.n,
+                    region_data.s,
+                    region_data.e,
+                    region_data.w,
+                    region_data.nsres,
+                    region_data.ewres,
+                ]
+            ):
+                raise ValueError(
+                    "n, s, e, w, nsres and ewres must be set for 2D regions."
+                )
             gs.run_command(
                 "g.region",
                 flags="o",
