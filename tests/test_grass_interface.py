@@ -239,15 +239,70 @@ class TestGrassInterface:
             )
         with pytest.raises(ValueError):
             grass_i.write_raster_map(np_array_bad, test_case.map_name)
-        grass_i.write_raster_map(np_array_good, test_case.map_name)
-        map_info = gs.parse_command(
-            "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
-        )
-        assert map_info["rows"] == str(region.rows)
-        assert map_info["cols"] == str(region.cols)
-        assert map_info["datatype"] == test_case.g_dtype
-        # remove map
-        gs.run_command("g.remove", flags="f", type="raster", name=test_case.map_name)
+
+        try:
+            grass_i.write_raster_map(np_array_good, test_case.map_name)
+            map_info = gs.parse_command(
+                "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
+            )
+            assert map_info["rows"] == str(region.rows)
+            assert map_info["cols"] == str(region.cols)
+            assert map_info["datatype"] == test_case.g_dtype
+            map_univar = gs.parse_command("r.univar", flags="g", map=test_case.map_name)
+            float(map_univar["mean"]) == np_array_good.mean()
+            float(map_univar["min"]) == np_array_good.min()
+            float(map_univar["max"]) == np_array_good.max()
+        finally:
+            gs.run_command(
+                "g.remove", flags="f", type="raster", name=test_case.map_name
+            )
+
+    @pytest.mark.parametrize(
+        "test_case",
+        [
+            TestCase(np_dtype=np.uint8, g_dtype="CELL", map_name="test_write_int"),
+            TestCase(np_dtype=np.float32, g_dtype="FCELL", map_name="test_write_f32"),
+            TestCase(np_dtype=np.float64, g_dtype="DCELL", map_name="test_write_f64"),
+        ],
+    )
+    def test_write_raster3d_map(self, grass_i: GrassInterface, test_case: TestCase):
+        rng = np.random.default_rng()
+        region = grass_i.get_region()
+        if test_case.g_dtype == "CELL":
+            np_array_good = rng.integers(
+                0,
+                255,
+                size=(region.depths, region.rows3, region.cols3),
+                dtype=test_case.np_dtype,
+            )
+            np_array_bad = rng.integers(0, 255, size=(5, 2), dtype=test_case.np_dtype)
+        else:
+            np_array_bad = rng.random(size=(20, 23), dtype=test_case.np_dtype)
+            np_array_good = rng.random(
+                size=(region.depths, region.rows3, region.cols3),
+                dtype=test_case.np_dtype,
+            )
+        with pytest.raises(ValueError):
+            grass_i.write_raster3d_map(np_array_bad, test_case.map_name)
+
+        try:
+            grass_i.write_raster3d_map(np_array_good, test_case.map_name)
+            map_info = gs.parse_command(
+                "r3.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
+            )
+            assert map_info["rows"] == str(region.rows3)
+            assert map_info["cols"] == str(region.cols3)
+            assert map_info["depths"] == str(region.depths)
+            map_univar = gs.parse_command(
+                "r3.univar", flags="g", map=test_case.map_name
+            )
+            float(map_univar["mean"]) == np_array_good.mean()
+            float(map_univar["min"]) == np_array_good.min()
+            float(map_univar["max"]) == np_array_good.max()
+        finally:
+            gs.run_command(
+                "g.remove", flags="f", type="raster_3d", name=test_case.map_name
+            )
 
     def test_register_maps_in_stds(self, grass_i):
         rng = np.random.default_rng()
