@@ -416,6 +416,7 @@ class GrassInterface(object):
             if t_type == "relative":
                 if not isinstance(map_time, timedelta):
                     raise TypeError("relative time requires a timedelta object.")
+                # TODO: support other units
                 rel_time = map_time.total_seconds()
                 map_dts.set_relative_time(rel_time, None, "seconds")
             elif t_type == "absolute":

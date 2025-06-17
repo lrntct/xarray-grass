@@ -290,21 +290,20 @@ class TestToGrassSuccess:
         else:
             pytest.fail(f"Unsupported time_dim_type: {time_dim_type}")
 
-        # Keys for dims_spec_for_helper should be 'time', 'y', 'x'
         if use_latlon_dims:
             dims_spec_for_helper = {
-                "time": time_coords,
+                "start_time": time_coords,
                 "y": np.linspace(50, 50.0 + (img_height - 1) * 0.01, img_height),
                 "x": np.linspace(10, 10.0 + (img_width - 1) * 0.01, img_width),
             }
-            expected_dims_order_in_da = ("time", "latitude", "longitude")
+            expected_dims_order_in_da = ("start_time", "latitude", "longitude")
         else:
             dims_spec_for_helper = {
-                "time": time_coords,
+                "start_time": time_coords,
                 "y": np.arange(img_height, dtype=float),
                 "x": np.arange(img_width, dtype=float),
             }
-            expected_dims_order_in_da = ("time", "y", "x")
+            expected_dims_order_in_da = ("start_time", "y", "x")
 
         shape = (num_times, img_height, img_width)
         session_crs_wkt = grass_i.get_crs_wkt_str()
@@ -313,7 +312,7 @@ class TestToGrassSuccess:
             dims_spec=dims_spec_for_helper,
             shape=shape,
             crs_wkt=session_crs_wkt,
-            name="test_strds_raster",  # Base name for maps in STRDS
+            name="test_strds",
             use_latlon_dims=use_latlon_dims,
             time_dim_type=time_dim_type,
             fill_value_generator=lambda s: np.arange(s[0] * s[1] * s[2])
@@ -324,7 +323,7 @@ class TestToGrassSuccess:
             f"DataArray dims {sample_da.dims} do not match expected {expected_dims_order_in_da}"
         )
 
-        target_mapset_name = temp_gisdb.mapset  # Use PERMANENT mapset
+        target_mapset_name = temp_gisdb.mapset
         mapset_path_obj = (
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         )
@@ -333,68 +332,68 @@ class TestToGrassSuccess:
         to_grass(
             dataset=sample_da,
             mapset=mapset_arg,
-            create=False,  # Write to existing mapset
+            create=False,
         )
-
-        # No need to assert mapset_path_obj.exists() as PERMANENT always exists
-        # No need to add PERMANENT to g.mapsets
-
         strds_name_full = f"{sample_da.name}@{target_mapset_name}"
 
-        available_strds = grass_i.list_grass_objects(
-            object_type="strds", mapset_pattern=target_mapset_name
-        )
-        assert strds_name_full in available_strds, (
-            f"STRDS '{strds_name_full}' not found. Found: {available_strds}"
-        )
-
-        strds_maps_info_raw = gs.read_command(
-            "t.rast.list", input=strds_name_full, columns="name,start_time", quiet=True
-        )
-
-        strds_map_names_in_grass = []
-        if strds_maps_info_raw and strds_maps_info_raw.strip():
-            for line in strds_maps_info_raw.strip().splitlines():
-                parts = line.split()
-                if parts:  # Ensure line is not empty after split
-                    strds_map_names_in_grass.append(parts[0].split("@")[0])
-
-        assert len(strds_map_names_in_grass) == num_times, (
-            f"Expected {num_times} maps in STRDS '{strds_name_full}', found {len(strds_map_names_in_grass)}. Maps: {strds_map_names_in_grass}"
-        )
-
-        # Check statistics for the first and last time slices
-        # This assumes t.rast.list output is ordered chronologically, which is typical.
-        indices_to_check = [0, num_times - 1] if num_times > 0 else []
-
-        for idx_in_da_time in indices_to_check:
-            time_val = sample_da.time.values[idx_in_da_time]
-            da_slice = sample_da.sel(time=time_val).astype(
-                float
-            )  # Ensure float for comparison
-
-            # Assuming map order from t.rast.list corresponds to time order in DataArray
-            map_to_check_name = strds_map_names_in_grass[idx_in_da_time]
-            map_to_check_full = f"{map_to_check_name}@{target_mapset_name}"
-
-            univar_stats = gs.parse_command(
-                "r.univar", map=map_to_check_full, flags="g", quiet=True
+        # make sure to delete file
+        try:
+            available_strds = grass_i.list_strds()
+            assert strds_name_full in available_strds, (
+                f"STRDS '{strds_name_full}' not found. Found: {available_strds}"
             )
-            for key, value in univar_stats.items():
+
+            strds_maps_in_grass = grass_i.list_maps_in_strds(strds_name_full)
+            strds_map_names_in_grass = [m.id for m in strds_maps_in_grass]
+
+            assert len(strds_map_names_in_grass) == num_times, (
+                f"Expected {num_times} maps in STRDS '{strds_name_full}', found {len(strds_map_names_in_grass)}."
+            )
+
+            # Check statistics for the first and last time slices
+            # This assumes t.rast.list output is ordered chronologically, which is typical.
+            indices_to_check = [0, num_times - 1] if num_times > 0 else []
+            for idx_in_da_time in indices_to_check:
+                time_val = sample_da.start_time.values[idx_in_da_time]
+                da_slice = sample_da.sel(start_time=time_val).astype(
+                    float
+                )  # Ensure float for comparison
+
+                # Assuming map order from t.rast.list corresponds to time order in DataArray
+                map_to_check_full = strds_map_names_in_grass[idx_in_da_time]
+                print(f"{map_to_check_full=}")
+
+                old_region = grass_i.get_region()
                 try:
-                    univar_stats[key] = float(value)
-                except ValueError:
-                    univar_stats[key] = np.nan
+                    gs.run_command(
+                        "g.region", flags="o", raster=map_to_check_full, quiet=True
+                    )
+                    univar_stats = gs.parse_command(
+                        "r.univar", map=map_to_check_full, flags="g", quiet=True
+                    )
+                finally:
+                    grass_i.set_region(old_region)
 
-            assert np.isclose(
-                univar_stats.get("min", np.nan), da_slice.min().item(), equal_nan=True
+                assert np.isclose(
+                    univar_stats.get("min", np.nan),
+                    da_slice.min().item(),
+                    equal_nan=True,
+                )
+                assert np.isclose(
+                    univar_stats.get("max", np.nan),
+                    da_slice.max().item(),
+                    equal_nan=True,
+                )
+                assert np.isclose(
+                    univar_stats.get("mean", np.nan),
+                    da_slice.mean().item(),
+                    equal_nan=True,
+                )
+        finally:
+            gs.run_command(
+                "t.remove", inputs=strds_name_full, type="strds", flags="rfd"
             )
-            assert np.isclose(
-                univar_stats.get("max", np.nan), da_slice.max().item(), equal_nan=True
-            )
-            assert np.isclose(
-                univar_stats.get("mean", np.nan), da_slice.mean().item(), equal_nan=True
-            )
+            pass
 
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])

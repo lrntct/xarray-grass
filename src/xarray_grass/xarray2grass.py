@@ -19,6 +19,8 @@ from typing import Mapping
 
 from pyproj import CRS
 import xarray as xr
+import numpy as np
+import pandas as pd
 import grass_session  # noqa: F401
 
 from xarray_grass.grass_interface import GrassInterface
@@ -46,7 +48,7 @@ def to_grass(
     dataset: xr.Dataset | xr.DataArray,
     mapset: str | Path,
     dims: Mapping[str, str] = None,
-    create: bool = True,
+    create: bool = False,
 ) -> None:
     """Convert an xarray.Dataset or xarray.DataArray to GRASS GIS maps.
 
@@ -93,6 +95,11 @@ def to_grass(
     project_name = mapset_path.parent.stem
     project_path = mapset_path.parent
     gisdb = project_path.parent
+
+    if create:
+        # Not until GRASS 8.5
+        raise NotImplementedError("'create' not yet available.")
+
     if mapset_path.is_file():
         raise ValueError(f"Mapset path '{mapset_path}' is a file, not a directory.")
 
@@ -107,20 +114,18 @@ def to_grass(
             f"Path '{mapset_path}' exists but is not a valid GRASS mapset."
         )
 
-    # This check is for when mapset doesn't exist AND create is True (or default True)
-    # but the parent is not a GRASS project.
     if not mapset_path.is_dir() and create and not dir_is_grass_project(project_path):
         raise ValueError(
             f"Mapset '{mapset_path}' not found and its parent directory "
             f"'{project_path}' is not a valid GRASS project."
         )
 
-    # if the path is not a mapset (but parent is a project and create is True)
     if not mapset_path.is_dir() and dir_is_grass_project(project_path) and create:
         # gs.run_command(
         #     "g.mapset", mapset=mapset_path.name, project=project_name, flags="c"
         # )
-        pass  # Skip until grass 8.5
+        # Skip until grass 8.5
+        pass
 
     # set the dimensions dict
     if dims is not None:
@@ -129,14 +134,9 @@ def to_grass(
         # Start with a copy of defaults, then update with valid user-provided dims
         processed_dims = default_dims.copy()
         for k, v in dims.items():
-            if k not in default_dims:
-                # Optionally, raise an error or warning for unrecognized dim keys
-                # For now, just ignore them to match previous filtering logic
-                continue
             processed_dims[k] = v
         dims = processed_dims
     else:
-        # Use default dimension names if not provided
         dims = default_dims.copy()
 
     # Check if we're already in a GRASS session
@@ -266,28 +266,67 @@ def datarray_to_grass(
     is_strds = len(data.dims) == 3 and has_time and is_spatial_2d
     is_str3ds = len(data.dims) == 4 and has_time and is_spatial_3d
 
-    error_msg = (
-        f"DataArray {data.name} does not match any supported GRASS dataset type. "
-        f"Expected 2D, 3D, STRDS, or STR3DS."
-    )
     # Set temp region
     current_region = gi.get_region()
     temp_region = get_region_from_xarray(data, dims)
     gi.set_region(temp_region)
-
     try:
         if is_raster:
             gi.write_raster_map(data, data.name)
         elif is_strds:
-            # write STRDS
-            pass
+            write_strds(data, gi)
         elif is_raster_3d:
             gi.write_raster3d_map(data, data.name)
         elif is_str3ds:
             # write STR3DS
             pass
         else:
-            raise ValueError(error_msg)
+            raise ValueError(
+                f"DataArray {data.name} does not match any supported GRASS dataset type. "
+                f"Expected 2D, 3D, STRDS, or STR3DS."
+            )
     finally:
         # Restore the original region
         gi.set_region(current_region)
+
+
+def write_strds(data: xr.DataArray, gi: GrassInterface):
+    # print(f"{data=}")
+    # 1. Determine the temporal type
+    time_dtype = data.start_time.dtype
+    if isinstance(time_dtype, np.dtypes.DateTime64DType):
+        temporal_type = "absolute"
+    elif np.issubdtype(time_dtype, np.integer):
+        temporal_type = "relative"
+        # TODO: find unit
+    else:
+        raise ValueError(f"Temporal type not supported: {time_dtype}")
+    # 2. Determine the semantic type
+    # TODO: find actual type
+    semantic_type = "mean"
+    # 3. Loop through the time dim:
+    map_list = []
+    for index, time in enumerate(data.start_time):
+        darray = data.sel(start_time=time)
+        nd_array = darray.values
+        # 3.1 Write each map individually
+        raster_name = f"{data.name}_{temporal_type}_{index}"
+        gi.write_raster_map(arr=nd_array, rast_name=raster_name)
+        # 3.2 populate an iterable[tuple[str, datetime | timedelta]]
+        time_value = time.values.item()
+        if temporal_type == "absolute":
+            absolute_time = pd.Timestamp(time_value)
+            map_list.append((raster_name, absolute_time.to_pydatetime()))
+        else:
+            relative_time = pd.Timedelta(time_value, unit=None)  # TODO: unit
+            map_list.append((raster_name, relative_time.to_pytimedelta()))
+    # 4. Create STRDS and register the maps in it
+    gi.register_maps_in_stds(
+        stds_title="",
+        stds_name=data.name,
+        stds_desc="",
+        map_list=map_list,
+        semantic=semantic_type,
+        t_type=temporal_type,
+    )
+    pass

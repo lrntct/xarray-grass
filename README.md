@@ -30,7 +30,6 @@ Data variables:
     boundary_county_500m  (y, x) float64 162kB ...
     elevation             (y, x) float32 81kB ...
 Attributes:
-    crs_proj:  +proj=lcc +lat_0=33.75 +lon_0=-79 +lat_1=36.1666666666667 +lat...
     crs_wkt:   PROJCRS["NAD83(HARN) / North Carolina",BASEGEOGCRS["NAD83(HARN...
 ```
 
@@ -52,7 +51,7 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 
 ## Roadmap
 
-### Version 1.0 goals
+### Goals for version 1.0
 
 - [x] Load a single raster map
 - [x] Load a single Space-time Raster Dataset (strds)
@@ -63,12 +62,16 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 - [x] Support for the `drop_variables` parameter
 - [ ] Write from xarray to GRASS
   - [x] Write to a 2D raster
-  - [ ] Write to STRDS
-  - [ ] Write to 3D raster
+  - [x] Write to STRDS
+  - [x] Write to 3D raster
   - [ ] Write to STR3DS
-  - [ ] Handle data transpose if dimensions are not in the expected order.
+  - [ ] Support time units for relative time
+  - [ ] Honour the `dims` argument
+  - [ ] Support `end_time`
+  - [ ] Handle data transpose if dimensions are not in the expected order
   - [ ] Accept writing into a specific mapset (GRASS 8.5)
-  - [ ] Accept different 3D resolution in NS and EW dimensions (GRASS 8.5)
+  - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)
+  - [ ] Read CRS definitions from CF compatible fields
 - [ ] Lazy loading of all raster types
 
 ### Stretch goals
