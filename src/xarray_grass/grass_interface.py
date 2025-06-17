@@ -14,6 +14,7 @@ GNU General Public License for more details.
 """
 
 import os
+import math
 from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -146,18 +147,22 @@ class GrassInterface(object):
         # 3D region
         else:
             # TODO: remove when grass 8.5 is released
-            if region_data.nsres3 != region_data.ewres3:
-                raise ValueError("ewres3 and nsres3 must be equal.")
+            tolerance = 1e-9
+            if not math.isclose(
+                region_data.nsres3, region_data.ewres3, rel_tol=tolerance
+            ):
+                raise ValueError(
+                    f"ewres3 and nsres3 must be equal (within {tolerance} relative tolerance)."
+                )
             gs.run_command(
                 "g.region",
+                flags="o",
                 n=region_data.n,
                 s=region_data.s,
                 e=region_data.e,
                 w=region_data.w,
                 t=region_data.t,
                 b=region_data.b,
-                nsres=region_data.nsres,
-                ewres=region_data.ewres,
                 res3=region_data.nsres3,
                 # nsres3=region_data.nsres3,
                 # ewres3=region_data.ewres3,
@@ -356,6 +361,20 @@ class GrassInterface(object):
         map2d = garray.array(dtype=arr.dtype)
         map2d[:] = arr
         map2d.write(mapname=rast_name, overwrite=self.overwrite)
+        return self
+
+    def write_raster3d_map(self, arr: np.ndarray, rast_name: str) -> Self:
+        region = self.get_region()
+        region_shape = (region.depths, region.rows3, region.cols3)
+        if region_shape != arr.shape:
+            raise ValueError(
+                f"Cannot write an array of shape {arr.shape} into "
+                f"a GRASS region of size {region_shape}"
+            )
+        # Write with array interface
+        map3d = garray.array3d(dtype=arr.dtype)
+        map3d[:] = arr
+        map3d.write(mapname=rast_name, overwrite=self.overwrite)
         return self
 
     def register_maps_in_stds(

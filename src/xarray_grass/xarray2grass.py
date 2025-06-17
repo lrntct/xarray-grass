@@ -282,8 +282,7 @@ def datarray_to_grass(
             # write STRDS
             pass
         elif is_raster_3d:
-            # write raster 3D map
-            pass
+            gi.write_raster3d_map(data, data.name)
         elif is_str3ds:
             # write STR3DS
             pass

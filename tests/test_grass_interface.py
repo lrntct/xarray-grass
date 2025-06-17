@@ -101,8 +101,8 @@ class TestGrassInterface:
             s=30.4,
             w=-12.3,
             e=150.9,
-            nsres=20,
-            ewres=23.3,
+            nsres3=2.3,  # grass<8.5 requires nsres3==ewres3
+            ewres3=2.3,
             t=1000.0,
             b=0.0,
             tbres=10.0,
@@ -117,8 +117,8 @@ class TestGrassInterface:
         assert region.s == pytest.approx(temp_3d_region.s)
         assert region.w == pytest.approx(temp_3d_region.w)
         assert region.e == pytest.approx(temp_3d_region.e)
-        assert region.nsres == pytest.approx(temp_3d_region.nsres, abs=1e-3)
-        assert region.ewres == pytest.approx(temp_3d_region.ewres, abs=1e-1)
+        assert region.nsres3 == pytest.approx(temp_3d_region.nsres3, abs=1e-2)
+        assert region.ewres3 == pytest.approx(temp_3d_region.ewres3, abs=1e-2)
         assert region.t == pytest.approx(temp_3d_region.t)
         assert region.b == pytest.approx(temp_3d_region.b)
         assert region.tbres == pytest.approx(temp_3d_region.tbres, abs=1e-3)

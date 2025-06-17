@@ -161,13 +161,15 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         region["ewres"] = ewres_2d
         region["nsres"] = nsres_2d
 
-    # Calculate bounds (n, s, e, w)
-    current_ewres = (
-        region["ewres3"] if is_3d and region["ewres3"] is not None else region["ewres"]
-    )
-    current_nsres = (
-        region["nsres3"] if is_3d and region["nsres3"] is not None else region["nsres"]
-    )
+    # Calculate bounds (n, s, e, w) and ensure resolutions match array dimensions
+    if is_3d:
+        # For 3D data, use nsres3/ewres3 if available
+        current_ewres = region["ewres3"]
+        current_nsres = region["nsres3"]
+    else:
+        # For 2D data, use nsres/ewres
+        current_ewres = region["ewres"]
+        current_nsres = region["nsres"]
 
     if x_coords_np is not None and current_ewres is not None and len(x_coords_np) > 0:
         region["w"] = float(x_coords_np[0] - current_ewres / 2)

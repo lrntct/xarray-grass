@@ -189,10 +189,12 @@ class TestToGrassSuccess:
             }
             expected_dims_order_in_da = ("z", "latitude_3d", "longitude_3d")
         else:
+            # Use coordinates within valid range for NAD83(HARN) / North Carolina
+            res3 = 1000
             dims_spec_for_helper = {
                 "z": np.arange(img_depth, dtype=float),
-                "y": np.arange(img_height, dtype=float),
-                "x": np.arange(img_width, dtype=float),
+                "y": np.linspace(220000, 220000 + (img_height - 1) * res3, img_height),
+                "x": np.linspace(630000, 630000 + (img_width - 1) * res3, img_width),
             }
             expected_dims_order_in_da = ("z", "y_3d", "x_3d")
 
@@ -233,7 +235,7 @@ class TestToGrassSuccess:
 
         # Verification using list_raster3d
         available_rasters_3d = grass_i.list_raster3d(mapset=target_mapset_name)
-        assert sample_da.name in available_rasters_3d, (
+        assert grass_raster_name_full in available_rasters_3d, (
             f"3D Raster base name '{sample_da.name}' not found in mapset '{target_mapset_name}'. Found: {available_rasters_3d}"
         )
 
@@ -241,7 +243,7 @@ class TestToGrassSuccess:
             "r3.info", map=grass_raster_name_full, flags="g", quiet=True
         )
 
-        assert int(info["depth"]) == img_depth
+        assert int(info["depths"]) == img_depth
         assert int(info["rows"]) == img_height
         assert int(info["cols"]) == img_width
 

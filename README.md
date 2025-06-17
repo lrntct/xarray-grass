@@ -63,8 +63,12 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
 - [x] Support for the `drop_variables` parameter
 - [ ] Write from xarray to GRASS
   - [x] Write to a 2D raster
-  - [ ] Accept writing into a specific mapset (needs GRASS 8.5)
-  - [ ] Accept different 3D resolution in NS and EW dimensions (probably GRASS 8.5)
+  - [ ] Write to STRDS
+  - [ ] Write to 3D raster
+  - [ ] Write to STR3DS
+  - [ ] Handle data transpose if dimensions are not in the expected order.
+  - [ ] Accept writing into a specific mapset (GRASS 8.5)
+  - [ ] Accept different 3D resolution in NS and EW dimensions (GRASS 8.5)
 - [ ] Lazy loading of all raster types
 
 ### Stretch goals
