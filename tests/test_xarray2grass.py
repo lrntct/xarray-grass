@@ -108,17 +108,17 @@ class TestToGrassSuccess:
             assert grass_raster_name_full in available_rasters, (
                 f"Raster '{grass_raster_name_full}' not found in mapset '{target_mapset_name}'. Found: {available_rasters}"
             )
+            info = gs.parse_command(
+                "r.info", map=grass_raster_name_full, flags="g", quiet=True
+            )
+            assert int(info["rows"]) == img_height
+            assert int(info["cols"]) == img_width
             # Store current region (which is the original/default one from the test session)
             original_region_for_assertions = grass_i.get_region()
             try:
                 gs.run_command(
                     "g.region", flags="o", raster=grass_raster_name_full, quiet=True
                 )
-                info = gs.parse_command(
-                    "r.info", map=grass_raster_name_full, flags="g", quiet=True
-                )
-                assert int(info["rows"]) == img_height
-                assert int(info["cols"]) == img_width
                 # Check data statistics
                 # Ensure data type of xarray DA is float for direct comparison with r.univar output
                 sample_da_float = sample_da.astype(float)
@@ -152,9 +152,6 @@ class TestToGrassSuccess:
             )
 
         finally:
-            # Clean up created mapset to keep tests isolated
-            # First, change current mapset to PERMANENT to allow deletion of target_mapset_name
-            # gs.run_command("g.mapset", mapset="PERMANENT", quiet=True)
             gs.run_command(
                 "g.remove",
                 flags="f",
@@ -162,7 +159,6 @@ class TestToGrassSuccess:
                 name=grass_raster_name_full,
                 quiet=True,
             )
-            # The main gisdb is cleaned up by the temp_gisdb fixture.
 
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
@@ -199,9 +195,7 @@ class TestToGrassSuccess:
             expected_dims_order_in_da = ("z", "y_3d", "x_3d")
 
         shape = (img_depth, img_height, img_width)  # (z, y, x)
-
         session_crs_wkt = grass_i.get_crs_wkt_str()
-
         sample_da = create_sample_dataarray(
             dims_spec=dims_spec_for_helper,
             shape=shape,
@@ -216,48 +210,59 @@ class TestToGrassSuccess:
             f"DataArray dims {sample_da.dims} do not match expected {expected_dims_order_in_da}"
         )
 
-        target_mapset_name = temp_gisdb.mapset  # Use PERMANENT mapset
+        target_mapset_name = temp_gisdb.mapset
         mapset_path_obj = (
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         )
         mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
 
-        to_grass(
-            dataset=sample_da,
-            mapset=mapset_arg,
-            create=False,  # Write to existing mapset
-        )
+        # Try statement for file cleanup
+        try:
+            to_grass(
+                dataset=sample_da,
+                mapset=mapset_arg,
+                create=False,
+            )
+            grass_raster_name_full = f"{sample_da.name}@{target_mapset_name}"
+            available_rasters_3d = grass_i.list_raster3d(mapset=target_mapset_name)
 
-        # No need to assert mapset_path_obj.exists() as PERMANENT always exists
-        # No need to add PERMANENT to g.mapsets
+            assert grass_raster_name_full in available_rasters_3d, (
+                f"3D Raster base name '{sample_da.name}' not found in mapset '{target_mapset_name}'. Found: {available_rasters_3d}"
+            )
+            info = gs.parse_command(
+                "r3.info", map=grass_raster_name_full, flags="g", quiet=True
+            )
+            assert int(info["depths"]) == img_depth
+            assert int(info["rows"]) == img_height
+            assert int(info["cols"]) == img_width
 
-        grass_raster_name_full = f"{sample_da.name}@{target_mapset_name}"
+            # Run univar in the adequate region
+            old_region = grass_i.get_region()
+            try:
+                gs.run_command(
+                    "g.region", flags="o", raster_3d=grass_raster_name_full, quiet=True
+                )
+                univar3_stats = gs.parse_command(
+                    "r3.univar", map=grass_raster_name_full, flags="g", quiet=True
+                )
+            finally:
+                grass_i.set_region(old_region)
 
-        # Verification using list_raster3d
-        available_rasters_3d = grass_i.list_raster3d(mapset=target_mapset_name)
-        assert grass_raster_name_full in available_rasters_3d, (
-            f"3D Raster base name '{sample_da.name}' not found in mapset '{target_mapset_name}'. Found: {available_rasters_3d}"
-        )
+            mean_val_grass = float(univar3_stats["mean"])
+            min_val_grass = float(univar3_stats["min"])
+            max_val_grass = float(univar3_stats["max"])
+            assert np.isclose(mean_val_grass, sample_da.mean().item())
+            assert np.isclose(min_val_grass, sample_da.min().item())
+            assert np.isclose(max_val_grass, sample_da.max().item())
 
-        info = gs.parse_command(
-            "r3.info", map=grass_raster_name_full, flags="g", quiet=True
-        )
-
-        assert int(info["depths"]) == img_depth
-        assert int(info["rows"]) == img_height
-        assert int(info["cols"]) == img_width
-
-        # Value checking for 3D rasters is more complex.
-        # r3.univar exists but might be slow for large rasters in tests.
-        # For now, metadata checks are primary.
-        # Example: check min/max if r3.univar is fast enough or if a specific slice can be checked.
-        # univar3_stats = gs.parse_command("r3.univar", map=grass_raster_name_full, quiet=True)
-        # min_val_grass = float(univar3_stats['min']) # Key names might differ
-        # max_val_grass = float(univar3_stats['max'])
-        # assert np.isclose(min_val_grass, sample_da.min().item())
-        # assert np.isclose(max_val_grass, sample_da.max().item())
-        # This part is commented out as r3.univar might not output simple 'min=' 'max=' like r.univar -g
-        # and full statistical comparison is deferred.
+        finally:
+            gs.run_command(
+                "g.remove",
+                flags="f",
+                type="raster_3d",
+                name=grass_raster_name_full,
+                quiet=True,
+            )
 
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])

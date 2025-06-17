@@ -294,7 +294,7 @@ class TestGrassInterface:
             assert map_info["cols"] == str(region.cols3)
             assert map_info["depths"] == str(region.depths)
             map_univar = gs.parse_command(
-                "r3.univar", flags="g", map=test_case.map_name
+                "r3.univar", flags="g", map=f"{test_case.map_name}@PERMANENT"
             )
             float(map_univar["mean"]) == np_array_good.mean()
             float(map_univar["min"]) == np_array_good.min()
