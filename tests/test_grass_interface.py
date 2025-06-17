@@ -32,6 +32,8 @@ ACTUAL_STRDS = "LST_Day_monthly@modis_lst"
 ACTUAL_RASTER_MAP = "elevation@PERMANENT"
 RELATIVE_STR3DS = "test_str3ds_relative"
 
+TestCase = namedtuple("TestCase", ["np_dtype", "g_dtype", "map_name"])
+
 
 def test_no_grass_session():
     with pytest.raises(RuntimeError):
@@ -211,45 +213,41 @@ class TestGrassInterface:
         assert np_map.dtype == "float32"
         assert not np.isnan(np_map).any()
 
-    def test_write_raster_map(self, grass_i):
-        rng = np.random.default_rng()
-        # tests cases
-        TestCase = namedtuple("TestCase", ["np_dtype", "g_dtype", "map_name"])
-        test_cases = [
+    @pytest.mark.parametrize(
+        "test_case",
+        [
             TestCase(np_dtype=np.uint8, g_dtype="CELL", map_name="test_write_int"),
             TestCase(np_dtype=np.float32, g_dtype="FCELL", map_name="test_write_f32"),
             TestCase(np_dtype=np.float64, g_dtype="DCELL", map_name="test_write_f64"),
-        ]
+        ],
+    )
+    def test_write_raster_map(self, grass_i: GrassInterface, test_case: TestCase):
+        rng = np.random.default_rng()
         region = grass_i.get_region()
-        for test_case in test_cases:
-            if test_case.g_dtype == "CELL":
-                np_array_good = rng.integers(
-                    0,
-                    255,
-                    size=(region.rows, region.cols),
-                    dtype=test_case.np_dtype,
-                )
-                np_array_bad = rng.integers(
-                    0, 255, size=(5, 2), dtype=test_case.np_dtype
-                )
-            else:
-                np_array_bad = rng.random(size=(20, 23), dtype=test_case.np_dtype)
-                np_array_good = rng.random(
-                    size=(region.rows, region.cols), dtype=test_case.np_dtype
-                )
-            with pytest.raises(ValueError):
-                grass_i.write_raster_map(np_array_bad, test_case.map_name)
-            grass_i.write_raster_map(np_array_good, test_case.map_name)
-            map_info = gs.parse_command(
-                "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
+        if test_case.g_dtype == "CELL":
+            np_array_good = rng.integers(
+                0,
+                255,
+                size=(region.rows, region.cols),
+                dtype=test_case.np_dtype,
             )
-            assert map_info["rows"] == str(region.rows)
-            assert map_info["cols"] == str(region.cols)
-            assert map_info["datatype"] == test_case.g_dtype
-            # remove map
-            gs.run_command(
-                "g.remove", flags="f", type="raster", name=test_case.map_name
+            np_array_bad = rng.integers(0, 255, size=(5, 2), dtype=test_case.np_dtype)
+        else:
+            np_array_bad = rng.random(size=(20, 23), dtype=test_case.np_dtype)
+            np_array_good = rng.random(
+                size=(region.rows, region.cols), dtype=test_case.np_dtype
             )
+        with pytest.raises(ValueError):
+            grass_i.write_raster_map(np_array_bad, test_case.map_name)
+        grass_i.write_raster_map(np_array_good, test_case.map_name)
+        map_info = gs.parse_command(
+            "r.info", flags="g", map=f"{test_case.map_name}@PERMANENT"
+        )
+        assert map_info["rows"] == str(region.rows)
+        assert map_info["cols"] == str(region.cols)
+        assert map_info["datatype"] == test_case.g_dtype
+        # remove map
+        gs.run_command("g.remove", flags="f", type="raster", name=test_case.map_name)
 
     def test_register_maps_in_stds(self, grass_i):
         rng = np.random.default_rng()
