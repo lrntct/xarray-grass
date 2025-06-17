@@ -375,17 +375,17 @@ class TestToGrassSuccess:
                     grass_i.set_region(old_region)
 
                 assert np.isclose(
-                    univar_stats.get("min", np.nan),
+                    float(univar_stats.get("min", np.nan)),
                     da_slice.min().item(),
                     equal_nan=True,
                 )
                 assert np.isclose(
-                    univar_stats.get("max", np.nan),
+                    float(univar_stats.get("max", np.nan)),
                     da_slice.max().item(),
                     equal_nan=True,
                 )
                 assert np.isclose(
-                    univar_stats.get("mean", np.nan),
+                    float(univar_stats.get("mean", np.nan)),
                     da_slice.mean().item(),
                     equal_nan=True,
                 )
@@ -643,7 +643,7 @@ class TestToGrassSuccess:
     def test_mapset_creation_true(self, temp_gisdb, grass_i: GrassInterface):
         """Test mapset creation when create=True."""
         pytest.skip(
-            "Skipping mapset creation test due to GRASS 8.4 tgis.init() bug with new mapsets in active session."
+            "Skipping mapset creation test due to GRASS <8.5 tgis.init() bug with changing mapsets in active session."
         )
         session_crs_wkt = grass_i.get_crs_wkt_str()
         new_mapset_name = "mapset_created_by_test"
