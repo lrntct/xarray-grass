@@ -361,7 +361,6 @@ class TestToGrassSuccess:
 
                 # Assuming map order from t.rast.list corresponds to time order in DataArray
                 map_to_check_full = strds_map_names_in_grass[idx_in_da_time]
-                print(f"{map_to_check_full=}")
 
                 old_region = grass_i.get_region()
                 try:
@@ -876,22 +875,12 @@ class TestToGrassSuccess:
             dataset=sample_da,
             mapset=str(mapset_path),
             create=False,
-            dims=dims_param,  # Write to existing mapset
+            dims=dims_param,
         )
 
-        # No need to assert mapset_path.exists() as PERMANENT always exists
-        # No need to add PERMANENT to g.mapsets
-
         available_rasters = grass_i.list_raster(mapset=target_mapset_name)
-        assert da_name in available_rasters
+        assert grass_i.get_id_from_name(da_name) in available_rasters
 
-        # Verification of dims mapping is primarily by successful import.
-        # The `to_grass` function internally uses these mappings to find the
-        # coordinate data within the xarray object. If it imports successfully
-        # with the given `dims` mapping, it implies the mapping was understood.
-        # More detailed checks would involve inspecting GRASS metadata if it stored
-        # original dimension names, which it typically doesn't directly.
-        # So, successful creation is the main check here.
         # If `expected_grass_dims_match_da_standard` is True, it means we expect
         # GRASS to have used its standard interpretation of the DA's *original* standard dims.
         # If False, it means a custom mapping was applied, and GRASS still made a valid map.

@@ -95,7 +95,6 @@ class TestXarrayGrass:
         )
         test_dataset = xr.open_dataset(mapset_path, raster=ACTUAL_RASTER_MAP)
         region = grass_i.get_region()
-        print(f"test_load_raster: {region=}")
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 2
         assert len(test_dataset.x) == region.cols

@@ -335,7 +335,6 @@ class TestGrassInterfaceReadWrite:
             type="strds",
             input=f"{stds_name}@PERMANENT",
         )
-        print(strds_info)
         assert strds_info["name"] == stds_name
         assert strds_info["mapset"] == "PERMANENT"
         assert strds_info["id"] == f"{stds_name}@PERMANENT"
