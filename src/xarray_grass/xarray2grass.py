@@ -291,7 +291,6 @@ def datarray_to_grass(
 
 
 def write_strds(data: xr.DataArray, gi: GrassInterface):
-    # print(f"{data=}")
     # 1. Determine the temporal type
     time_dtype = data.start_time.dtype
     if isinstance(time_dtype, np.dtypes.DateTime64DType):

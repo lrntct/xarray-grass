@@ -814,25 +814,16 @@ class TestToGrassSuccess:
         assert sample_da.name in available_rasters
 
     @pytest.mark.parametrize(
-        "use_latlon_dims_in_da, dims_param, expected_grass_dims_match_da_standard",
+        "use_latlon_dims_in_da, rename_map",
         [
-            (False, None, True),  # DA uses y,x; no dims mapping -> GRASS uses y,x
-            (
-                True,
-                None,
-                True,
-            ),  # DA uses lat,lon; no dims mapping -> GRASS uses lat,lon
-            (False, {"y": "northing", "x": "easting"}, False),  # DA y,x; map y->N, x->E
+            (False, None),
+            (True, None),
+            (False, {"y": "northing", "x": "easting"}),
             (
                 True,
                 {"latitude": "lat_custom", "longitude": "lon_custom"},
-                False,
-            ),  # DA lat,lon; map to custom
-            (
-                False,
-                {"y": "custom_y"},
-                True,
-            ),  # Partial map: DA y,x; map y->custom_y, x should remain x
+            ),
+            (False, {"y": "custom_y"}),
         ],
     )
     def test_dims_mapping(
@@ -840,54 +831,47 @@ class TestToGrassSuccess:
         temp_gisdb,
         grass_i: GrassInterface,
         use_latlon_dims_in_da: bool,
-        dims_param: dict,
-        expected_grass_dims_match_da_standard: bool,
+        rename_map: dict,
     ):
         """Test 'dims' mapping functionality."""
         session_crs_wkt = grass_i.get_crs_wkt_str()
-        target_mapset_name = temp_gisdb.mapset  # Use PERMANENT mapset
+        target_mapset_name = temp_gisdb.mapset
         mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         da_name = "dims_test_raster"
         img_height, img_width = 3, 2
 
         if use_latlon_dims_in_da:
             da_dims_spec = {
-                "y": np.linspace(50, 50.01, img_height),  # 'y' key for helper
-                "x": np.linspace(10, 10.01, img_width),  # 'x' key for helper
+                "y": np.linspace(50, 50.01, img_height),
+                "x": np.linspace(10, 10.01, img_width),
             }
-            # expected_da_actual_dims = ("latitude", "longitude")
         else:
             da_dims_spec = {
                 "y": np.arange(img_height, dtype=float),
                 "x": np.arange(img_width, dtype=float),
             }
-            # expected_da_actual_dims = ("y", "x")
 
         sample_da = create_sample_dataarray(
             dims_spec=da_dims_spec,
             shape=(img_height, img_width),
             crs_wkt=session_crs_wkt,
             name=da_name,
-            use_latlon_dims=use_latlon_dims_in_da,  # This sets the actual dim names in DA
+            use_latlon_dims=use_latlon_dims_in_da,
         )
 
+        if rename_map:
+            sample_da = sample_da.rename(rename_map)
         to_grass(
             dataset=sample_da,
             mapset=str(mapset_path),
             create=False,
-            dims=dims_param,
+            dims=rename_map,
         )
-
         available_rasters = grass_i.list_raster(mapset=target_mapset_name)
         assert grass_i.get_id_from_name(da_name) in available_rasters
 
-        # If `expected_grass_dims_match_da_standard` is True, it means we expect
-        # GRASS to have used its standard interpretation of the DA's *original* standard dims.
-        # If False, it means a custom mapping was applied, and GRASS still made a valid map.
         info = gs.parse_command(
             "r.info", map=f"{da_name}@{target_mapset_name}", flags="g", quiet=True
         )
         assert int(info["rows"]) == img_height
         assert int(info["cols"]) == img_width
-        # No direct way to check if GRASS "knows" about "northing" vs "y" from r.info,
-        # the key is that the data from the correct DA dimension was used.

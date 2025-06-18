@@ -65,14 +65,14 @@ In GRASS, you can list the accessible mapsets with `g.mapsets`.
   - [x] Write to STRDS
   - [x] Write to 3D raster
   - [ ] Write to STR3DS
+  - [ ] Honour the `dims` argument: transpose if dimensions are not in the expected order
   - [ ] Support time units for relative time
-  - [ ] Honour the `dims` argument
   - [ ] Support `end_time`
-  - [ ] Handle data transpose if dimensions are not in the expected order
   - [ ] Accept writing into a specific mapset (GRASS 8.5)
   - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)
   - [ ] Read CRS definitions from CF compatible fields
 - [ ] Lazy loading of all raster types
+- [ ] Properly test with lat-lon location
 
 ### Stretch goals
 
