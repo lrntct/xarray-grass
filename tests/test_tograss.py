@@ -584,18 +584,15 @@ class TestToGrassSuccess:
         sample_ds = create_sample_dataset(
             data_vars_specs=dataset_specs,
             crs_wkt=session_crs_wkt,
-            global_use_latlon_dims=False,  # Use x,y for this test
-            global_time_dim_type="relative",  # Use relative time
+            global_use_latlon_dims=False,
+            global_time_dim_type="relative",
         )
 
         to_grass(
             dataset=sample_ds,
             mapset=mapset_arg,
-            create=False,  # Write to existing mapset
+            create=False,
         )
-
-        # No need to assert mapset_path_obj.exists() as PERMANENT always exists
-        # No need to add PERMANENT to g.mapsets
 
         # Verification for each type
         # 2D Raster
@@ -690,14 +687,12 @@ class TestToGrassSuccess:
             name="data_for_mapset_creation",
         )
 
-        # Pass the string path to the mapset directory
         to_grass(dataset=sample_da, mapset=str(mapset_path), create=True)
 
         assert mapset_path.exists() and mapset_path.is_dir(), (
             f"Mapset directory {mapset_path} was not created."
         )
 
-        # Add mapset to search path for verification, to_grass might not do this.
         current_mapsets_list = grass_i.get_accessible_mapsets()
         if new_mapset_name not in current_mapsets_list:
             gs.run_command(
@@ -719,8 +714,7 @@ class TestToGrassSuccess:
         session_crs_wkt = grass_i.get_crs_wkt_str()
         existing_mapset_name = "existing_mapset_for_test"
         mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / existing_mapset_name
-        # Create the mapset manually first
-        if mapset_path.exists():  # Cleanup if exists
+        if mapset_path.exists():
             try:
                 current_active_mapset = gs.read_command(
                     "g.mapset", flags="p", mapset="$"
@@ -755,7 +749,6 @@ class TestToGrassSuccess:
             f"Test setup failed: Mapset {existing_mapset_name} could not be created."
         )
 
-        # Add to search path for subsequent operations if not already there
         current_mapsets_list = grass_i.get_accessible_mapsets()
         if existing_mapset_name not in current_mapsets_list:
             gs.run_command(
@@ -769,7 +762,6 @@ class TestToGrassSuccess:
             name="data_for_existing_mapset",
         )
 
-        # Pass the string path to the mapset directory
         to_grass(dataset=sample_da, mapset=str(mapset_path), create=False)
 
         available_rasters = grass_i.list_raster(mapset=existing_mapset_name)
@@ -783,14 +775,10 @@ class TestToGrassSuccess:
     ):
         """Test that 'mapset' argument accepts both str and Path objects."""
         session_crs_wkt = grass_i.get_crs_wkt_str()
-        # Test will now write to PERMANENT mapset
         target_mapset_name = temp_gisdb.mapset
         mapset_path_obj = (
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         )
-
-        # No need to ensure mapset does not exist as we are using PERMANENT
-        # No need to clean up PERMANENT mapset
 
         mapset_arg = mapset_path_obj if mapset_as_path_object else str(mapset_path_obj)
 
@@ -801,16 +789,8 @@ class TestToGrassSuccess:
             name="data_for_mapset_arg_type",
         )
 
-        to_grass(
-            dataset=sample_da, mapset=mapset_arg, create=False
-        )  # Write to existing PERMANENT mapset
-
-        # PERMANENT mapset always exists, no need to assert its creation here.
-        # The mapset_path_obj now refers to the PERMANENT mapset due to the first diff.
-        # The original 'mapset_name' variable is replaced by 'target_mapset_name' from the first diff's replacement.
-        available_rasters = grass_i.list_raster(
-            mapset=target_mapset_name
-        )  # Check in PERMANENT
+        to_grass(dataset=sample_da, mapset=mapset_arg, create=False)
+        available_rasters = grass_i.list_raster(mapset=target_mapset_name)
         assert sample_da.name in available_rasters
 
     @pytest.mark.parametrize(
