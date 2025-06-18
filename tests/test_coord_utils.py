@@ -262,9 +262,38 @@ def test_get_region_from_xarray_custom_dim_names():
     dims_map = {
         "x": "my_x",
         "y": "my_y",
-        # Add other default_dims keys if they were relevant,
-        # but for this 2D case, only x and y matter.
-        # Ensure all keys from default_dims are present if the function expects them.
+        **{k: default_dims[k] for k in default_dims if k not in ["x", "y"]},
+    }
+    region = get_region_from_xarray(da, dims_map)
+
+    expected_ewres = 100.0
+    expected_nsres = 100.0
+    expected_w = custom_x_coords[0] - expected_ewres / 2
+    expected_e = custom_x_coords[-1] + expected_ewres / 2
+    expected_s = custom_y_coords[0] - expected_nsres / 2
+    expected_n = custom_y_coords[-1] + expected_nsres / 2
+
+    assert region.w == pytest.approx(expected_w)
+    assert region.e == pytest.approx(expected_e)
+    assert region.s == pytest.approx(expected_s)
+    assert region.n == pytest.approx(expected_n)
+    assert region.ewres == pytest.approx(expected_ewres)
+    assert region.nsres == pytest.approx(expected_nsres)
+
+
+def test_get_region_from_xarray_partial_custom_dim_names():
+    """Test get_region_from_xarray with partial custom dimension names."""
+    data = np.arange(12).reshape(3, 4)
+    custom_x_coords = np.array([100, 200, 300, 400])
+    custom_y_coords = np.array([50, 150, 250])
+    da = xr.DataArray(
+        data,
+        coords={"x": custom_x_coords, "my_y": custom_y_coords},
+        dims=["my_y", "x"],
+    )
+    dims_map = {
+        "x": "x",
+        "y": "my_y",
         **{k: default_dims[k] for k in default_dims if k not in ["x", "y"]},
     }
     region = get_region_from_xarray(da, dims_map)
