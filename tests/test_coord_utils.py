@@ -17,7 +17,7 @@ import xarray as xr
 import numpy as np
 import pytest
 
-from xarray_grass.xarray2grass import default_dims
+from xarray_grass.to_grass import default_dims
 from xarray_grass.coord_utils import get_region_from_xarray
 
 
