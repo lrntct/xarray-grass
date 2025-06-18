@@ -55,7 +55,7 @@ def test_get_region_from_xarray_2d_xy():
 
 
 def test_get_region_from_xarray_2d_latlon():
-    """Test get_region_from_xarray with a 2D DataArray using longitude, latitude."""
+    """Test get_region_from_xarray with a 2D DataArray using longitude, latitude with custom mapping."""
     data = np.arange(12).reshape(3, 4)
     lon_coords = np.array([-100.0, -90.0, -80.0, -70.0])
     lat_coords = np.array([30.0, 40.0, 50.0])
@@ -65,6 +65,8 @@ def test_get_region_from_xarray_2d_latlon():
         dims=["latitude", "longitude"],
     )
     dims_map = default_dims.copy()
+    dims_map["x"] = "longitude"
+    dims_map["y"] = "latitude"
     region = get_region_from_xarray(da, dims_map)
 
     expected_ewres = 10.0
@@ -88,7 +90,7 @@ def test_get_region_from_xarray_2d_latlon():
 
 
 def test_get_region_from_xarray_2d_latlon_descending_lat():
-    """Test get_region_from_xarray with descending latitude."""
+    """Test get_region_from_xarray with descending latitude using custom mapping."""
     data = np.arange(12).reshape(3, 4)
     lon_coords = np.array([-100.0, -90.0, -80.0, -70.0])
     lat_coords = np.array([50.0, 40.0, 30.0])  # Descending latitude
@@ -98,6 +100,8 @@ def test_get_region_from_xarray_2d_latlon_descending_lat():
         dims=["latitude", "longitude"],
     )
     dims_map = default_dims.copy()
+    dims_map["x"] = "longitude"
+    dims_map["y"] = "latitude"
     region = get_region_from_xarray(da, dims_map)
 
     expected_ewres = 10.0
@@ -152,7 +156,7 @@ def test_get_region_from_xarray_3d_xyz():
 
 
 def test_get_region_from_xarray_3d_latlonz():
-    """Test get_region_from_xarray with a 3D DataArray using longitude_3d, latitude_3d, z."""
+    """Test get_region_from_xarray with a 3D DataArray using longitude_3d, latitude_3d, z with custom mapping."""
     data = np.arange(2 * 3 * 4).reshape(2, 3, 4)
     lon_coords = np.array([-100.0, -90.0, -80.0, -70.0])
     lat_coords = np.array([30.0, 40.0, 50.0])
@@ -167,6 +171,8 @@ def test_get_region_from_xarray_3d_latlonz():
         dims=["z", "latitude_3d", "longitude_3d"],
     )
     dims_map = default_dims.copy()
+    dims_map["x_3d"] = "longitude_3d"
+    dims_map["y_3d"] = "latitude_3d"
     region = get_region_from_xarray(da, dims_map)
 
     expected_ewres3 = 10.0

@@ -184,7 +184,6 @@ def create_sample_dataarray(
     shape: tuple,
     crs_wkt: str,
     name: str = "test_data",
-    use_latlon_dims: bool = False,
     time_dim_type: str = "absolute",  # "absolute", "relative", or "none"
     fill_value_generator=None,
 ) -> xr.DataArray:
@@ -193,16 +192,13 @@ def create_sample_dataarray(
 
     dims_spec: Dict mapping dimension names to their coordinate values.
                The keys should be the standard names ('time', 'z', 'y', 'x') and
-               will be translated to 'latitude', 'longitude', 'y_3d', 'x_3d'
-               based on use_latlon_dims and context (2D vs 3D).
+               will be translated to 'y_3d', 'x_3d' based on context (2D vs 3D).
                The order of keys in dims_spec must match the desired final
                dimension order of the DataArray and the order in `shape`.
                Example: {'time': pd.date_range(...), 'y': np.arange(...), ...}
     shape: Tuple defining the shape of the data array, matching the order of dims_spec.
     crs_wkt: WKT string for the crs_wkt attribute.
     name: Name of the xr.DataArray.
-    use_latlon_dims: If True, spatial dimensions will be named 'latitude'/'longitude'
-                     (and '_3d' versions). Otherwise 'x'/'y'.
     time_dim_type: If 'time' in dims_spec, specifies if time is 'absolute'
                    (datetime objects) or 'relative' (numeric).
     fill_value_generator: Function to generate data, e.g., lambda s: np.random.rand(*s).
@@ -236,15 +232,15 @@ def create_sample_dataarray(
             coords[actual_dim_name] = coord_values
         elif dim_key == "y":
             if is_3d_spatial_context:
-                actual_dim_name = "latitude_3d" if use_latlon_dims else "y_3d"
+                actual_dim_name = "y_3d"
             else:  # 2D
-                actual_dim_name = "latitude" if use_latlon_dims else "y"
+                actual_dim_name = "y"
             coords[actual_dim_name] = coord_values
         elif dim_key == "x":
             if is_3d_spatial_context:
-                actual_dim_name = "longitude_3d" if use_latlon_dims else "x_3d"
+                actual_dim_name = "x_3d"
             else:  # 2D
-                actual_dim_name = "longitude" if use_latlon_dims else "x"
+                actual_dim_name = "x"
             coords[actual_dim_name] = coord_values
         else:  # Other dimensions (e.g., custom, non-spatial, non-temporal)
             coords[actual_dim_name] = coord_values
@@ -271,7 +267,6 @@ def create_sample_dataarray(
 def create_sample_dataset(
     data_vars_specs: dict,
     crs_wkt: str,
-    global_use_latlon_dims: bool = False,
     global_time_dim_type: str = "absolute",
 ) -> xr.Dataset:
     """
@@ -279,11 +274,10 @@ def create_sample_dataset(
 
     data_vars_specs: Dict where keys are variable names and values are dicts
                      of parameters for create_sample_dataarray (dims_spec, shape, name,
-                     optionally use_latlon_dims, time_dim_type, fill_value_generator).
+                     optionally time_dim_type, fill_value_generator).
                      The 'dims_spec' within each variable's spec should follow the
                      ordering and naming conventions for create_sample_dataarray.
     crs_wkt: WKT string for the crs_wkt attribute of the dataset and its DataArrays.
-    global_use_latlon_dims: Default for use_latlon_dims if not in var_spec.
     global_time_dim_type: Default for time_dim_type if not in var_spec.
     """
     data_vars = {}
@@ -297,7 +291,6 @@ def create_sample_dataset(
         dims_spec = spec["dims_spec"]
         shape = spec["shape"]
         da_name = spec.get("name", var_name)
-        use_latlon = spec.get("use_latlon_dims", global_use_latlon_dims)
         time_type = spec.get("time_dim_type", global_time_dim_type)
         fill_gen = spec.get("fill_value_generator", None)
 
@@ -306,7 +299,6 @@ def create_sample_dataset(
             shape=shape,
             crs_wkt=crs_wkt,
             name=da_name,
-            use_latlon_dims=use_latlon,
             time_dim_type=time_type,
             fill_value_generator=fill_gen,
         )

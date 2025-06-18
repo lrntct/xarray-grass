@@ -29,13 +29,11 @@ from .conftest import create_sample_dataarray, create_sample_dataset
 
 @pytest.mark.usefixtures("grass_session_fixture", "grass_test_region")
 class TestToGrassSuccess:
-    @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     def test_dataarray_2d_conversion(
         self,
         temp_gisdb,
         grass_i: GrassInterface,
-        use_latlon_dims: bool,
         mapset_is_path_obj: bool,
     ):
         """Test conversion of a 2D xr.DataArray to a GRASS Raster."""
@@ -43,43 +41,22 @@ class TestToGrassSuccess:
         assert not grass_i.has_mask()
         img_width = 10
         img_height = 12
-        # Prepare sample DataArray
-        if use_latlon_dims:
-            # For lat/lon, use linspace to simulate geographic coordinates
-            dims_spec = {
-                "latitude": np.linspace(
-                    50, 50.0 + (img_height - 1) * 0.01, img_height
-                ),  # e.g. 50.00, 50.01 ...
-                "longitude": np.linspace(
-                    10, 10.0 + (img_width - 1) * 0.01, img_width
-                ),  # e.g. 10.00, 10.01 ...
-            }
-            # The helper function `create_sample_dataarray` expects keys 'y', 'x' for spatial dims
-            # and translates them based on `use_latlon_dims`.
-            # So, the keys in dims_spec for helper should be 'y', 'x'.
-            dims_spec_for_helper = {
-                "y": dims_spec["latitude"],
-                "x": dims_spec["longitude"],
-            }
-            expected_dims_order_in_da = ("latitude", "longitude")
-        else:
-            # For x/y, use arange to simulate projected or indexed coordinates
-            dims_spec_for_helper = {
-                "y": np.arange(img_height, dtype=float),  # 0.0, 1.0, ...
-                "x": np.arange(img_width, dtype=float),  # 0.0, 1.0, ...
-            }
-            expected_dims_order_in_da = ("y", "x")
 
-        shape = (img_height, img_width)  # (y, x) or (lat, lon)
+        dims_spec_for_helper = {
+            "y": np.arange(img_height, dtype=float),  # 0.0, 1.0, ...
+            "x": np.arange(img_width, dtype=float),  # 0.0, 1.0, ...
+        }
+        expected_dims_order_in_da = ("y", "x")
+
+        shape = (img_height, img_width)  # (y, x)
 
         session_crs_wkt = grass_i.get_crs_wkt_str()
 
         sample_da = create_sample_dataarray(
-            dims_spec=dims_spec_for_helper,  # Use the y,x keyed spec
+            dims_spec=dims_spec_for_helper,
             shape=shape,
             crs_wkt=session_crs_wkt,
             name="test_2d_raster",
-            use_latlon_dims=use_latlon_dims,  # This controls final naming in DataArray
             fill_value_generator=lambda s: np.arange(s[0] * s[1])
             .reshape(s)
             .astype(float),
@@ -160,13 +137,11 @@ class TestToGrassSuccess:
                 quiet=True,
             )
 
-    @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     def test_dataarray_3d_conversion(
         self,
         temp_gisdb,
         grass_i: GrassInterface,
-        use_latlon_dims: bool,
         mapset_is_path_obj: bool,
     ):
         """Test conversion of a 3D xr.DataArray to a GRASS 3D Raster."""
@@ -174,25 +149,14 @@ class TestToGrassSuccess:
         img_height = 8
         img_width = 6
 
-        # Prepare sample DataArray
-        # Helper `create_sample_dataarray` expects 'z', 'y', 'x' as keys in dims_spec
-        # and translates y,x to y_3d/x_3d or latitude_3d/longitude_3d.
-        if use_latlon_dims:
-            dims_spec_for_helper = {
-                "z": np.arange(img_depth, dtype=float),
-                "y": np.linspace(50, 50.0 + (img_height - 1) * 0.01, img_height),
-                "x": np.linspace(10, 10.0 + (img_width - 1) * 0.01, img_width),
-            }
-            expected_dims_order_in_da = ("z", "latitude_3d", "longitude_3d")
-        else:
-            # Use coordinates within valid range for NAD83(HARN) / North Carolina
-            res3 = 1000
-            dims_spec_for_helper = {
-                "z": np.arange(img_depth, dtype=float),
-                "y": np.linspace(220000, 220000 + (img_height - 1) * res3, img_height),
-                "x": np.linspace(630000, 630000 + (img_width - 1) * res3, img_width),
-            }
-            expected_dims_order_in_da = ("z", "y_3d", "x_3d")
+        # Use coordinates within valid range for NAD83(HARN) / North Carolina
+        res3 = 1000
+        dims_spec_for_helper = {
+            "z": np.arange(img_depth, dtype=float),
+            "y": np.linspace(220000, 220000 + (img_height - 1) * res3, img_height),
+            "x": np.linspace(630000, 630000 + (img_width - 1) * res3, img_width),
+        }
+        expected_dims_order_in_da = ("z", "y_3d", "x_3d")
 
         shape = (img_depth, img_height, img_width)  # (z, y, x)
         session_crs_wkt = grass_i.get_crs_wkt_str()
@@ -201,7 +165,6 @@ class TestToGrassSuccess:
             shape=shape,
             crs_wkt=session_crs_wkt,
             name="test_3d_raster",
-            use_latlon_dims=use_latlon_dims,
             fill_value_generator=lambda s: np.arange(s[0] * s[1] * s[2])
             .reshape(s)
             .astype(float),
@@ -264,14 +227,12 @@ class TestToGrassSuccess:
                 quiet=True,
             )
 
-    @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     @pytest.mark.parametrize("time_dim_type", ["absolute", "relative"])
     def test_dataarray_to_strds_conversion(
         self,
         temp_gisdb,
         grass_i: GrassInterface,
-        use_latlon_dims: bool,
         mapset_is_path_obj: bool,
         time_dim_type: str,
     ):
@@ -290,20 +251,12 @@ class TestToGrassSuccess:
         else:
             pytest.fail(f"Unsupported time_dim_type: {time_dim_type}")
 
-        if use_latlon_dims:
-            dims_spec_for_helper = {
-                "start_time": time_coords,
-                "y": np.linspace(50, 50.0 + (img_height - 1) * 0.01, img_height),
-                "x": np.linspace(10, 10.0 + (img_width - 1) * 0.01, img_width),
-            }
-            expected_dims_order_in_da = ("start_time", "latitude", "longitude")
-        else:
-            dims_spec_for_helper = {
-                "start_time": time_coords,
-                "y": np.arange(img_height, dtype=float),
-                "x": np.arange(img_width, dtype=float),
-            }
-            expected_dims_order_in_da = ("start_time", "y", "x")
+        dims_spec_for_helper = {
+            "start_time": time_coords,
+            "y": np.arange(img_height, dtype=float),
+            "x": np.arange(img_width, dtype=float),
+        }
+        expected_dims_order_in_da = ("start_time", "y", "x")
 
         shape = (num_times, img_height, img_width)
         session_crs_wkt = grass_i.get_crs_wkt_str()
@@ -313,7 +266,6 @@ class TestToGrassSuccess:
             shape=shape,
             crs_wkt=session_crs_wkt,
             name="test_strds",
-            use_latlon_dims=use_latlon_dims,
             time_dim_type=time_dim_type,
             fill_value_generator=lambda s: np.arange(s[0] * s[1] * s[2])
             .reshape(s)
@@ -394,14 +346,12 @@ class TestToGrassSuccess:
             )
             pass
 
-    @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     @pytest.mark.parametrize("time_dim_type", ["absolute", "relative"])
     def test_dataarray_to_str3ds_conversion(
         self,
         temp_gisdb,
         grass_i: GrassInterface,
-        use_latlon_dims: bool,
         mapset_is_path_obj: bool,
         time_dim_type: str,
     ):
@@ -419,23 +369,13 @@ class TestToGrassSuccess:
         else:
             pytest.fail(f"Unsupported time_dim_type: {time_dim_type}")
 
-        # Keys for dims_spec_for_helper: 'time', 'z', 'y', 'x'
-        if use_latlon_dims:
-            dims_spec_for_helper = {
-                "time": time_coords,
-                "z": np.arange(img_depth, dtype=float),
-                "y": np.linspace(50, 50.0 + (img_height - 1) * 0.001, img_height),
-                "x": np.linspace(10, 10.0 + (img_width - 1) * 0.001, img_width),
-            }
-            expected_dims_order_in_da = ("time", "z", "latitude_3d", "longitude_3d")
-        else:
-            dims_spec_for_helper = {
-                "time": time_coords,
-                "z": np.arange(img_depth, dtype=float),
-                "y": np.arange(img_height, dtype=float),
-                "x": np.arange(img_width, dtype=float),
-            }
-            expected_dims_order_in_da = ("time", "z", "y_3d", "x_3d")
+        dims_spec_for_helper = {
+            "time": time_coords,
+            "z": np.arange(img_depth, dtype=float),
+            "y": np.arange(img_height, dtype=float),
+            "x": np.arange(img_width, dtype=float),
+        }
+        expected_dims_order_in_da = ("time", "z", "y_3d", "x_3d")
 
         shape = (num_times, img_depth, img_height, img_width)
         session_crs_wkt = grass_i.get_crs_wkt_str()
@@ -445,7 +385,6 @@ class TestToGrassSuccess:
             shape=shape,
             crs_wkt=session_crs_wkt,
             name="test_str3ds_vol",  # Base name for volumes in STR3DS
-            use_latlon_dims=use_latlon_dims,
             time_dim_type=time_dim_type,
             fill_value_generator=lambda s: np.arange(s[0] * s[1] * s[2] * s[3])
             .reshape(s)
@@ -528,10 +467,6 @@ class TestToGrassSuccess:
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         )
         mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
-
-        # Define specs for various DataArrays
-        # Using simple x/y and relative time for brevity in this combined test
-        # Individual type tests cover lat/lon and absolute time variations.
 
         # 2D Raster Spec
         da_2d_spec = {
@@ -794,23 +729,12 @@ class TestToGrassSuccess:
         assert sample_da.name in available_rasters
 
     @pytest.mark.parametrize(
-        "use_latlon_dims_in_da, rename_map",
-        [
-            (False, None),
-            (True, None),
-            (False, {"y": "northing", "x": "easting"}),
-            (
-                True,
-                {"latitude": "lat_custom", "longitude": "lon_custom"},
-            ),
-            (False, {"y": "custom_y"}),
-        ],
+        "rename_map", [None, {"y": "northing", "x": "easting"}, {"y": "custom_y"}]
     )
     def test_dims_mapping(
         self,
         temp_gisdb,
         grass_i: GrassInterface,
-        use_latlon_dims_in_da: bool,
         rename_map: dict,
     ):
         """Test 'dims' mapping functionality."""
@@ -820,23 +744,16 @@ class TestToGrassSuccess:
         da_name = "dims_test_raster"
         img_height, img_width = 3, 2
 
-        if use_latlon_dims_in_da:
-            da_dims_spec = {
-                "y": np.linspace(50, 50.01, img_height),
-                "x": np.linspace(10, 10.01, img_width),
-            }
-        else:
-            da_dims_spec = {
-                "y": np.arange(img_height, dtype=float),
-                "x": np.arange(img_width, dtype=float),
-            }
+        da_dims_spec = {
+            "y": np.arange(img_height, dtype=float),
+            "x": np.arange(img_width, dtype=float),
+        }
 
         sample_da = create_sample_dataarray(
             dims_spec=da_dims_spec,
             shape=(img_height, img_width),
             crs_wkt=session_crs_wkt,
             name=da_name,
-            use_latlon_dims=use_latlon_dims_in_da,
         )
 
         if rename_map:

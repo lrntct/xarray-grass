@@ -67,7 +67,7 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
     data_array : xr.DataArray
         The input xarray DataArray.
     dims : Mapping[str, str]
-        A mapping from standard dimension names (e.g., 'latitude', 'longitude', 'z')
+        A mapping from standard dimension names (e.g., 'x', 'y', 'z')
         to the actual dimension names used in the `data_array`. This mapping is
         expected to be complete and correct for the `data_array`.
 
@@ -100,21 +100,11 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
     x_coords_np, y_coords_np, z_coords_np = None, None, None
 
     if is_3d:
-        # Try 3D specific dim names first
-        lon_name = dims.get("longitude_3d")
-        lat_name = dims.get("latitude_3d")
+        # Use 3D specific dim names
         x_name = dims.get("x_3d")
         y_name = dims.get("y_3d")
 
         if (
-            lon_name
-            and lat_name
-            and lon_name in data_array.coords
-            and lat_name in data_array.coords
-        ):
-            x_coords_np = data_array.coords[lon_name].values
-            y_coords_np = data_array.coords[lat_name].values
-        elif (
             x_name
             and y_name
             and x_name in data_array.coords
@@ -134,20 +124,10 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         region["tbres"] = tbres_3d
 
     else:  # 2D case
-        lon_name = dims.get("longitude")
-        lat_name = dims.get("latitude")
         x_name = dims.get("x")
         y_name = dims.get("y")
 
         if (
-            lon_name
-            and lat_name
-            and lon_name in data_array.coords
-            and lat_name in data_array.coords
-        ):
-            x_coords_np = data_array.coords[lon_name].values
-            y_coords_np = data_array.coords[lat_name].values
-        elif (
             x_name
             and y_name
             and x_name in data_array.coords

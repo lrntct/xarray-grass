@@ -34,12 +34,8 @@ default_dims = {
     "end_time": "end_time",
     "x": "x",
     "y": "y",
-    "latitude": "latitude",
-    "longitude": "longitude",
     "x_3d": "x_3d",
     "y_3d": "y_3d",
-    "latitude_3d": "latitude_3d",
-    "longitude_3d": "longitude_3d",
     "z": "z",
 }
 
@@ -68,10 +64,9 @@ def to_grass(
         Path to the target GRASS mapset.
     dims : Mapping[str, str], optional
         A mapping from standard dimension names
-        ('start_time', 'end_time', 'x', 'y', 'latitude', 'longitude',
-        'x_3d', 'y_3d', 'latitude_3d', 'longitude_3d', 'z',)
+        ('start_time', 'end_time', 'x', 'y', 'x_3d', 'y_3d', 'z',)
         to the actual dimension names in the dataset. For example, if your 3D dataset
-        longitude coordinate is named 'lon', you would pass `dims={'longitude_3d': 'lon'}`.
+        east-west coordinate is named 'lon', you would pass `dims={'x_3d': 'lon'}`.
         Defaults to None, which implies standard dimension names are used.
     create : bool, optional
         If True (default), the mapset will be created if it does not exist.
@@ -197,36 +192,16 @@ def xarray_to_grass(
         datarray_to_grass(dataset, gi, dims)
 
 
-def dims_ok(data: xr.DataArray, gi: GrassInterface) -> bool:
-    """Check if the dimensions of the DataArray are valid for GRASS.
-    TODO: finish implementation."""
-    # time_dim = next([s for s in data.dims if "time" in s.lower()], None)
-    x_dim = next([s for s in data.dims if s.lower().startswith("x")], None)
-    y_dim = next([s for s in data.dims if s.lower().startswith("y")], None)
-    # z_dim = next([s for s in data.dims if s.lower().startswith("z")], None)
-    lat_dim = next([s for s in data.dims if s.lower().startswith("lat")], None)
-    lon_dim = next([s for s in data.dims if s.lower().startswith("lon")], None)
-
-    if any((x_dim, y_dim)) and any((lon_dim, lat_dim)):
-        raise ValueError(
-            f"DataArray {data.name} has conflicting x, y and lat, lon dimensions."
-        )
-    if any((x_dim, y_dim)) and not all((x_dim, y_dim)):
-        raise ValueError(f"DataArray {data.name} must have both x and y dimensions")
-    if any((lat_dim, lon_dim)) and not all((lat_dim, lon_dim)):
-        raise ValueError(f"DataArray {data.name} must have both lat and lon dimensions")
-    if not all((x_dim, y_dim)) or all((lat_dim, lon_dim)):
-        raise ValueError(
-            f"DataArray {data.name} must have either x and y or lat and lon dimensions."
-        )
-
-
 def datarray_to_grass(
     data: xr.DataArray,
     gi: GrassInterface,
     dims: Mapping[str, str] = None,
 ) -> None:
-    """Convert an xarray DataArray to GRASS maps."""
+    """Convert an xarray DataArray to GRASS maps.
+
+    Uses standardized (x, y) dimension naming internally. For datasets with
+    latitude/longitude dimensions, provide explicit mapping via dims parameter.
+    """
     if len(data.dims) > 4 or len(data.dims) < 2:
         raise ValueError(
             f"Only DataArray with 2 to 4 dimensions are supported. "
@@ -236,23 +211,15 @@ def datarray_to_grass(
     # Determine the type of GRASS dataset based on dimensions
     actual_dims = set(data.dims)  # For efficient lookup
 
-    # Check for 2D spatial dimensions (e.g., latitude, longitude or x, y)
-    has_latlon_2d = dims["latitude"] in actual_dims and dims["longitude"] in actual_dims
-    has_xy_2d = dims["x"] in actual_dims and dims["y"] in actual_dims
-    is_spatial_2d = has_latlon_2d or has_xy_2d
+    # Check for 2D spatial dimensions
+    is_spatial_2d = dims["x"] in actual_dims and dims["y"] in actual_dims
 
-    # Check for 3D spatial dimensions (e.g., latitude_3d, longitude_3d, z or x_3d, y_3d, z)
-    has_latlon_3d = (
-        dims["latitude_3d"] in actual_dims
-        and dims["longitude_3d"] in actual_dims
-        and dims["z"] in actual_dims
-    )
-    has_xy_3d = (
+    # Check for 3D spatial dimensions
+    is_spatial_3d = (
         dims["x_3d"] in actual_dims
         and dims["y_3d"] in actual_dims
         and dims["z"] in actual_dims
     )
-    is_spatial_3d = has_latlon_3d or has_xy_3d
 
     # Check for time dimension
     has_time = dims["start_time"] in actual_dims
