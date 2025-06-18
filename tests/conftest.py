@@ -97,7 +97,7 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
         gs.run_command("g.mapsets", mapset="modis_lst")
 
         # Set smaller resolution for faster tests, and info for 3D rasters
-        gs.run_command("g.region", b=0, t=1500, res3=500, res=100)
+        gs.run_command("g.region", flags="o", b=0, t=1500, res3=500, res=100)
 
         # Add relative and absolute str3ds
         gen_str3ds(temporal_type="relative")
@@ -105,6 +105,14 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
 
         yield session
         session.close()
+
+
+@pytest.fixture(scope="function")
+def grass_test_region(grass_session_fixture):
+    """A test region fixture to make sure the tests are run in a predictable region"""
+    gs.run_command("g.region", flags="o", b=0, t=1500, res3=500, res=100)
+    yield
+    gs.run_command("g.region", flags="od")
 
 
 @pytest.fixture(scope="class")

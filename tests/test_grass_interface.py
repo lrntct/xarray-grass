@@ -41,26 +41,7 @@ def test_no_grass_session():
 
 
 @pytest.mark.usefixtures("grass_session_fixture")
-class TestGrassInterface:
-    def test_grass_dtype(self, grass_i) -> None:
-        """Test the dtype conversion frm numpy to GRASS."""
-        assert grass_i.grass_dtype("bool_") == "CELL"
-        assert grass_i.grass_dtype("int_") == "CELL"
-        assert grass_i.grass_dtype("int8") == "CELL"
-        assert grass_i.grass_dtype("int16") == "CELL"
-        assert grass_i.grass_dtype("int32") == "CELL"
-        assert grass_i.grass_dtype("intc") == "CELL"
-        assert grass_i.grass_dtype("intp") == "CELL"
-        assert grass_i.grass_dtype("uint8") == "CELL"
-        assert grass_i.grass_dtype("uint16") == "CELL"
-        assert grass_i.grass_dtype("uint32") == "CELL"
-        assert grass_i.grass_dtype("float32") == "FCELL"
-        assert grass_i.grass_dtype("float64") == "DCELL"
-        with pytest.raises(ValueError):
-            grass_i.grass_dtype("bool")
-            grass_i.grass_dtype("int")
-            grass_i.grass_dtype("float")
-
+class TestRegionInterface:
     def test_get_region(self, grass_i):
         """Test the get_region method."""
         region = grass_i.get_region()
@@ -124,6 +105,28 @@ class TestGrassInterface:
         assert region.t == pytest.approx(temp_3d_region.t)
         assert region.b == pytest.approx(temp_3d_region.b)
         assert region.tbres == pytest.approx(temp_3d_region.tbres, abs=1e-3)
+
+
+@pytest.mark.usefixtures("grass_session_fixture")
+class TestGrassInterface:
+    def test_grass_dtype(self, grass_i) -> None:
+        """Test the dtype conversion frm numpy to GRASS."""
+        assert grass_i.grass_dtype("bool_") == "CELL"
+        assert grass_i.grass_dtype("int_") == "CELL"
+        assert grass_i.grass_dtype("int8") == "CELL"
+        assert grass_i.grass_dtype("int16") == "CELL"
+        assert grass_i.grass_dtype("int32") == "CELL"
+        assert grass_i.grass_dtype("intc") == "CELL"
+        assert grass_i.grass_dtype("intp") == "CELL"
+        assert grass_i.grass_dtype("uint8") == "CELL"
+        assert grass_i.grass_dtype("uint16") == "CELL"
+        assert grass_i.grass_dtype("uint32") == "CELL"
+        assert grass_i.grass_dtype("float32") == "FCELL"
+        assert grass_i.grass_dtype("float64") == "DCELL"
+        with pytest.raises(ValueError):
+            grass_i.grass_dtype("bool")
+            grass_i.grass_dtype("int")
+            grass_i.grass_dtype("float")
 
     def test_is_latlon(self):
         assert GrassInterface.is_latlon() is False
@@ -205,6 +208,9 @@ class TestGrassInterface:
         map_list = grass_i.list_maps_in_str3ds(RELATIVE_STR3DS)
         assert len(map_list) == 3
 
+
+@pytest.mark.usefixtures("grass_session_fixture", "grass_test_region")
+class TestGrassInterfaceReadWrite:
     def test_read_raster_map(self, grass_i):
         np_map = grass_i.read_raster_map(ACTUAL_RASTER_MAP)
         region = grass_i.get_region()
