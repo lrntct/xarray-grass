@@ -87,7 +87,7 @@ def test_dir_is_grass_mapset(grass_session_fixture, temp_gisdb):
     assert not dir_is_grass_mapset([list, dict])  # Nonsensical input
 
 
-@pytest.mark.usefixtures("grass_session_fixture")
+@pytest.mark.usefixtures("grass_session_fixture", "grass_test_region")
 class TestXarrayGrass:
     def test_load_raster(self, grass_i, temp_gisdb) -> None:
         mapset_path = os.path.join(
@@ -95,6 +95,7 @@ class TestXarrayGrass:
         )
         test_dataset = xr.open_dataset(mapset_path, raster=ACTUAL_RASTER_MAP)
         region = grass_i.get_region()
+        print(f"test_load_raster: {region=}")
         assert isinstance(test_dataset, xr.Dataset)
         assert len(test_dataset.dims) == 2
         assert len(test_dataset.x) == region.cols

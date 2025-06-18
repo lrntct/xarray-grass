@@ -27,7 +27,7 @@ from xarray_grass import GrassInterface
 from .conftest import create_sample_dataarray, create_sample_dataset
 
 
-@pytest.mark.usefixtures("grass_session_fixture")
+@pytest.mark.usefixtures("grass_session_fixture", "grass_test_region")
 class TestToGrassSuccess:
     @pytest.mark.parametrize("use_latlon_dims", [False, True])
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
