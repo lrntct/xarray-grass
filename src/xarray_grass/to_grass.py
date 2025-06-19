@@ -179,7 +179,7 @@ def xarray_to_grass(
     grass_crs = CRS(gi.get_crs_wkt_str())
     dataset_crs = CRS(dataset.attrs["crs_wkt"])
     # TODO: reproj if not same crs
-    # TODO: handle no CRS with for xy locations
+    # TODO: handle no CRS for xy locations
     if grass_crs != dataset_crs:
         raise ValueError(
             f"CRS mismatch: GRASS project CRS is {grass_crs}, "
@@ -247,7 +247,7 @@ def datarray_to_grass(
             write_stds(data, gi, dims)
         else:
             raise ValueError(
-                f"DataArray {data.name} does not match any supported GRASS dataset type. "
+                f"DataArray '{data.name}' does not match any supported GRASS dataset type. "
                 f"Expected 2D, 3D, STRDS, or STR3DS."
             )
     finally:

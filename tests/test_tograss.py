@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 import grass_session  # noqa: F401
 import grass.script as gs
+from grass.exceptions import CalledModuleError
 
 
 from xarray_grass import to_grass
@@ -286,20 +287,20 @@ class TestToGrassSuccess:
             mapset=mapset_arg,
             create=False,
         )
-        strds_name_full = f"{sample_da.name}@{target_mapset_name}"
+        strds_id = f"{sample_da.name}@{target_mapset_name}"
 
         # make sure to delete file
         try:
             available_strds = grass_i.list_strds()
-            assert strds_name_full in available_strds, (
-                f"STRDS '{strds_name_full}' not found. Found: {available_strds}"
+            assert strds_id in available_strds, (
+                f"STRDS '{strds_id}' not found. Found: {available_strds}"
             )
 
-            strds_maps_in_grass = grass_i.list_maps_in_strds(strds_name_full)
+            strds_maps_in_grass = grass_i.list_maps_in_strds(strds_id)
             strds_map_names_in_grass = [m.id for m in strds_maps_in_grass]
 
             assert len(strds_map_names_in_grass) == num_times, (
-                f"Expected {num_times} maps in STRDS '{strds_name_full}', found {len(strds_map_names_in_grass)}."
+                f"Expected {num_times} maps in STRDS '{strds_id}', found {len(strds_map_names_in_grass)}."
             )
 
             # Check statistics for the first and last time slices
@@ -339,9 +340,7 @@ class TestToGrassSuccess:
                     equal_nan=True,
                 )
         finally:
-            gs.run_command(
-                "t.remove", inputs=strds_name_full, type="strds", flags="rfd"
-            )
+            gs.run_command("t.remove", inputs=strds_id, type="strds", flags="rfd")
 
     @pytest.mark.parametrize("mapset_is_path_obj", [False, True])
     @pytest.mark.parametrize("time_dim_type", ["absolute", "relative"])
@@ -515,11 +514,14 @@ class TestToGrassSuccess:
             "strds_var": strds_spec,
             "str3ds_var": str3ds_spec,
         }
+        raster2d_id = grass_i.get_id_from_name("raster2d_var")
+        raster3d_id = grass_i.get_id_from_name("raster3d_var")
+        strds_id = grass_i.get_id_from_name("strds_var")
+        str3ds_id = grass_i.get_id_from_name("str3ds_var")
 
         sample_ds = create_sample_dataset(
             data_vars_specs=dataset_specs,
             crs_wkt=session_crs_wkt,
-            global_use_latlon_dims=False,
             global_time_dim_type="relative",
         )
 
@@ -527,49 +529,70 @@ class TestToGrassSuccess:
             dataset=sample_ds,
             mapset=mapset_arg,
             create=False,
+            dims={"start_time": "time"},
         )
+        try:
+            grass_objects = grass_i.list_grass_objects()
 
-        # Verification for each type
-        # 2D Raster
-        raster2d_name_full = f"{da_2d_spec['name']}@{target_mapset_name}"
-        available_rasters = grass_i.list_raster(mapset=target_mapset_name)
-        assert da_2d_spec["name"] in available_rasters
-        info2d = gs.parse_command(
-            "r.info", map=raster2d_name_full, flags="g", quiet=True
-        )
-        assert int(info2d["rows"]) == da_2d_spec["shape"][0]
-        assert int(info2d["cols"]) == da_2d_spec["shape"][1]
+            # 2D Raster
+            available_rasters = grass_objects["raster"]
+            assert raster2d_id in available_rasters
+            info2d = gs.parse_command("r.info", map=raster2d_id, flags="g", quiet=True)
+            assert int(info2d["rows"]) == da_2d_spec["shape"][0]
+            assert int(info2d["cols"]) == da_2d_spec["shape"][1]
 
-        # 3D Raster
-        raster3d_name_full = f"{da_3d_spec['name']}@{target_mapset_name}"
-        available_rasters_3d = grass_i.list_grass_objects(
-            object_type="raster_3d", mapset_pattern=target_mapset_name
-        )
-        assert raster3d_name_full in available_rasters_3d
-        info3d = gs.parse_command(
-            "r3.info", map=raster3d_name_full, flags="g", quiet=True
-        )
-        assert int(info3d["depth"]) == da_3d_spec["shape"][0]
-        assert int(info3d["rows"]) == da_3d_spec["shape"][1]
-        assert int(info3d["cols"]) == da_3d_spec["shape"][2]
+            # 3D Raster
+            available_rasters_3d = grass_objects["raster_3d"]
+            assert raster3d_id in available_rasters_3d
+            info3d = gs.parse_command("r3.info", map=raster3d_id, flags="g", quiet=True)
+            assert int(info3d["depths"]) == da_3d_spec["shape"][0]
+            assert int(info3d["rows"]) == da_3d_spec["shape"][1]
+            assert int(info3d["cols"]) == da_3d_spec["shape"][2]
 
-        # STRDS
-        strds_name_full = f"{strds_spec['name']}@{target_mapset_name}"
-        available_strds = grass_i.list_grass_objects(
-            object_type="strds", mapset_pattern=target_mapset_name
-        )
-        assert strds_name_full in available_strds
-        num_strds_maps = len(grass_i.list_maps_in_strds())
-        assert num_strds_maps == strds_spec["shape"][0]  # Number of time steps
+            # STRDS
+            available_strds = grass_objects["strds"]
+            assert strds_id in available_strds
+            num_strds_maps = len(grass_i.list_maps_in_strds(strds_id))
+            assert num_strds_maps == strds_spec["shape"][0]
 
-        # STR3DS
-        str3ds_name_full = f"{str3ds_spec['name']}@{target_mapset_name}"
-        available_str3ds = grass_i.list_grass_objects(
-            object_type="str3ds", mapset_pattern=target_mapset_name
-        )
-        assert str3ds_name_full in available_str3ds
-        num_str3ds_maps = len(grass_i.list_maps_in_str3ds())
-        assert num_str3ds_maps == str3ds_spec["shape"][0]  # Number of time steps
+            # STR3DS
+            available_str3ds = grass_objects["str3ds"]
+            assert str3ds_id in available_str3ds
+            num_str3ds_maps = len(grass_i.list_maps_in_str3ds(str3ds_id))
+            assert num_str3ds_maps == str3ds_spec["shape"][0]
+        finally:
+            try:
+                gs.run_command(
+                    "g.remove",
+                    flags="f",
+                    type="raster",
+                    name=raster2d_id,
+                    quiet=True,
+                )
+            except CalledModuleError:
+                pass
+            try:
+                gs.run_command(
+                    "g.remove",
+                    flags="f",
+                    type="raster_3d",
+                    name=raster3d_id,
+                    quiet=True,
+                )
+            except CalledModuleError:
+                pass
+            try:
+                gs.run_command(
+                    "t.remove", inputs=strds_id, type="strds", flags="rfd", quiet=True
+                )
+            except CalledModuleError:
+                pass
+            try:
+                gs.run_command(
+                    "t.remove", inputs=str3ds_id, type="str3ds", flags="rfd", quiet=True
+                )
+            except CalledModuleError:
+                pass
 
     def test_mapset_creation_true(self, temp_gisdb, grass_i: GrassInterface):
         """Test mapset creation when create=True."""
@@ -703,30 +726,6 @@ class TestToGrassSuccess:
         assert sample_da.name in available_rasters, (
             f"Raster '{sample_da.name}' not found in existing mapset '{existing_mapset_name}'."
         )
-
-    @pytest.mark.parametrize("mapset_as_path_object", [True, False])
-    def test_mapset_argument_type(
-        self, temp_gisdb, grass_i: GrassInterface, mapset_as_path_object: bool
-    ):
-        """Test that 'mapset' argument accepts both str and Path objects."""
-        session_crs_wkt = grass_i.get_crs_wkt_str()
-        target_mapset_name = temp_gisdb.mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-
-        mapset_arg = mapset_path_obj if mapset_as_path_object else str(mapset_path_obj)
-
-        sample_da = create_sample_dataarray(
-            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
-            shape=(2, 2),
-            crs_wkt=session_crs_wkt,
-            name="data_for_mapset_arg_type",
-        )
-
-        to_grass(dataset=sample_da, mapset=mapset_arg, create=False)
-        available_rasters = grass_i.list_raster(mapset=target_mapset_name)
-        assert sample_da.name in available_rasters
 
     @pytest.mark.parametrize(
         "rename_map", [None, {"y": "northing", "x": "easting"}, {"y": "custom_y"}]
