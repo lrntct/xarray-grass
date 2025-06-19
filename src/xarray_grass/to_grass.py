@@ -208,21 +208,19 @@ def datarray_to_grass(
             f"Found {len(data.dims)} dimension(s)."
         )
 
-    # Determine the type of GRASS dataset based on dimensions
-    actual_dims = set(data.dims)  # For efficient lookup
-
     # Check for 2D spatial dimensions
-    is_spatial_2d = dims["x"] in actual_dims and dims["y"] in actual_dims
+    is_spatial_2d = dims["x"] in data.dims and dims["y"] in data.dims
 
     # Check for 3D spatial dimensions
     is_spatial_3d = (
-        dims["x_3d"] in actual_dims
-        and dims["y_3d"] in actual_dims
-        and dims["z"] in actual_dims
+        dims["x_3d"] in data.dims
+        and dims["y_3d"] in data.dims
+        and dims["z"] in data.dims
     )
 
     # Check for time dimension
-    has_time = dims["start_time"] in actual_dims
+    has_time = dims["start_time"] in data.dims
+
     # Note: 'end_time' is also a potential temporal dimension but GRASS STRDS/STR3DS
     # are typically defined by a start time.
     # For simplicity 'start_time' is the primary indicator here.
@@ -237,16 +235,16 @@ def datarray_to_grass(
     current_region = gi.get_region()
     temp_region = get_region_from_xarray(data, dims)
     gi.set_region(temp_region)
+    #  TODO: reshape to match user dims
     try:
         if is_raster:
             gi.write_raster_map(data, data.name)
         elif is_strds:
-            write_strds(data, gi)
+            write_stds(data, gi, dims)
         elif is_raster_3d:
             gi.write_raster3d_map(data, data.name)
         elif is_str3ds:
-            # write STR3DS
-            pass
+            write_stds(data, gi, dims)
         else:
             raise ValueError(
                 f"DataArray {data.name} does not match any supported GRASS dataset type. "
@@ -257,36 +255,47 @@ def datarray_to_grass(
         gi.set_region(current_region)
 
 
-def write_strds(data: xr.DataArray, gi: GrassInterface):
-    # 1. Determine the temporal type
-    time_dtype = data.start_time.dtype
+def write_stds(data: xr.DataArray, gi: GrassInterface, dims: Mapping):
+    # 1. Determine the temporal coordinate and type
+    time_coord = data[dims["start_time"]]
+    time_dtype = time_coord.dtype
     if isinstance(time_dtype, np.dtypes.DateTime64DType):
         temporal_type = "absolute"
     elif np.issubdtype(time_dtype, np.integer):
         temporal_type = "relative"
-        # TODO: find unit
+        time_unit = time_coord.attrs.get("units", None)
     else:
         raise ValueError(f"Temporal type not supported: {time_dtype}")
     # 2. Determine the semantic type
     # TODO: find actual type
     semantic_type = "mean"
+    # 2.5 determine if 2D or 3D
+    is_3d = False
+    stds_type = "strds"
+    if len(data.isel({dims["start_time"]: 0}).dims) == 3:
+        is_3d = True
+        stds_type = "str3ds"
+
     # 3. Loop through the time dim:
     map_list = []
-    for index, time in enumerate(data.start_time):
-        darray = data.sel(start_time=time)
+    for index, time in enumerate(time_coord):
+        darray = data.sel({dims["start_time"]: time})
         nd_array = darray.values
         # 3.1 Write each map individually
         raster_name = f"{data.name}_{temporal_type}_{index}"
-        gi.write_raster_map(arr=nd_array, rast_name=raster_name)
+        if not is_3d:
+            gi.write_raster_map(arr=nd_array, rast_name=raster_name)
+        else:
+            gi.write_raster3d_map(arr=nd_array, rast_name=raster_name)
         # 3.2 populate an iterable[tuple[str, datetime | timedelta]]
         time_value = time.values.item()
         if temporal_type == "absolute":
             absolute_time = pd.Timestamp(time_value)
             map_list.append((raster_name, absolute_time.to_pydatetime()))
         else:
-            relative_time = pd.Timedelta(time_value, unit=None)  # TODO: unit
+            relative_time = pd.Timedelta(time_value, unit=time_unit)
             map_list.append((raster_name, relative_time.to_pytimedelta()))
-    # 4. Create STRDS and register the maps in it
+    # 4. Create STDS and register the maps in it
     gi.register_maps_in_stds(
         stds_title="",
         stds_name=data.name,
@@ -294,5 +303,5 @@ def write_strds(data: xr.DataArray, gi: GrassInterface):
         map_list=map_list,
         semantic=semantic_type,
         t_type=temporal_type,
+        stds_type=stds_type,
     )
-    pass

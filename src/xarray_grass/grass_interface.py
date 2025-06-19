@@ -409,6 +409,7 @@ class GrassInterface(object):
         map_list: list[tuple[str, datetime | timedelta]],
         semantic: str,
         t_type: str,
+        stds_type: str,
     ) -> Self:
         """Create a STDS, create one mapdataset for each map and
         register them in the temporal database.
@@ -419,7 +420,7 @@ class GrassInterface(object):
         stds_desc = ""
         stds = tgis.open_new_stds(
             name=stds_id,
-            type="strds",
+            type=stds_type,
             temporaltype=t_type,
             title=stds_title,
             descr=stds_desc,
@@ -433,7 +434,10 @@ class GrassInterface(object):
         for map_name, map_time in map_list:
             # create MapDataset
             map_id = self.get_id_from_name(map_name)
-            map_dts = tgis.RasterDataset(map_id)
+            if stds_type == "str3ds":
+                map_dts = tgis.Raster3DDataset(map_id)
+            else:
+                map_dts = tgis.RasterDataset(map_id)
             # load spatial data from map
             map_dts.load()
             # set time
@@ -455,8 +459,11 @@ class GrassInterface(object):
             map_dts_lst.append(map_dts)
         # Finally register the maps
         t_unit = {"relative": "seconds", "absolute": ""}
+        map_type = "raster"
+        if stds_type == "str3ds":
+            map_type = "raster_3d"
         tgis.register.register_map_object_list(
-            type="raster",
+            type=map_type,
             map_list=map_dts_lst,
             output_stds=stds,
             delete_empty=True,

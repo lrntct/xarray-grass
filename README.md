@@ -66,6 +66,10 @@ The attributes of the coordinates are in line with CF Conventions.
 
 The only attributes set at the dataset level are `crs_wkt` and `Conventions`.
 
+## Writing an Xarray Dataset or DataArray to GRASS
+
+TODO.
+
 ## Roadmap
 
 ### Goals for version 1.0
@@ -81,16 +85,16 @@ The only attributes set at the dataset level are `crs_wkt` and `Conventions`.
   - [x] Write to a 2D raster
   - [x] Write to STRDS
   - [x] Write to 3D raster
-  - [ ] Write to STR3DS
+  - [x] Write to STR3DS
   - [ ] Honour the `dims` argument: transpose if dimensions are not in the expected order
   - [ ] Support time units for relative time
   - [ ] Support `end_time`
   - [ ] Accept writing into a specific mapset (GRASS 8.5)
   - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)
-  - [ ] Read CRS definitions from CF compatible fields
 - [ ] Lazy loading of all raster types
 - [ ] Properly test with lat-lon location
 
 ### Stretch goals
 
 - [ ] Load all mapsets from a GRASS project (ex location)
+- [ ] Read CRS definitions from CF compatible fields

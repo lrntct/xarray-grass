@@ -328,6 +328,7 @@ class TestGrassInterfaceReadWrite:
             semantic="mean",
             map_list=maps_list,
             t_type="absolute",
+            stds_type="strds",
         )
         strds_info = gs.parse_command(
             "t.info",
