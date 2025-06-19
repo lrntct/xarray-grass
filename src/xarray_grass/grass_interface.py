@@ -51,6 +51,7 @@ strds_cols = ["id", "start_time", "end_time"]
 MapData = namedtuple("MapData", strds_cols)
 strds_infos = [
     "id",
+    "title",
     "temporal_type",
     "time_unit",
     "start_time",
@@ -173,6 +174,20 @@ class GrassInterface(object):
     def is_latlon():
         return gs.locn_is_latlong()
 
+    def is_xy(self):
+        """return True if the location is neither projected or latlon"""
+        proj_code = gs.parse_command("g.region", flags="pug")["projection"]
+        if int(proj_code) == 0:
+            return True
+        else:
+            return False
+
+    def get_spatial_units(self):
+        if self.is_xy:
+            return None
+        else:
+            return gs.parse_command("g.proj", flags="g")["units"]
+
     @staticmethod
     def get_id_from_name(name: str) -> str:
         """Take a map or stds name as input
@@ -277,6 +292,14 @@ class GrassInterface(object):
         objects_dict["str3ds"] = self.list_str3ds(mapset)
         return objects_dict
 
+    @staticmethod
+    def get_raster_info(raster_id):
+        return gs.parse_command("r.info", map=raster_id, flags="e")
+
+    @staticmethod
+    def get_raster3d_info(raster3d_id):
+        return gs.parse_command("r3.info", map=raster3d_id, flags="gh")
+
     def get_stds_infos(self, strds_name, stds_type) -> STRDSInfos:
         strds_id = self.get_id_from_name(strds_name)
         if stds_type not in ["strds", "str3ds"]:
@@ -296,6 +319,7 @@ class GrassInterface(object):
         spatial_extent = strds.get_spatial_extent_as_tuple()
         infos = STRDSInfos(
             id=strds_id,
+            title=strds.metadata.get_title(),
             temporal_type=temporal_type,
             time_unit=time_unit,
             start_time=start_time,

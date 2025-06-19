@@ -255,28 +255,29 @@ def open_grass_maps(
                 data_array_list.append(data_array)
         if raise_on_not_found and any(not_found.values()):
             raise ValueError(f"Objects not found: {not_found}")
-        dataset = xr.merge(data_array_list)
-        dataset.attrs["crs_wkt"] = gi.get_crs_wkt_str()
     finally:
         if session is not None:
             session.__exit__(None, None, None)
+
+    dataset = xr.merge(data_array_list)
+    dataset.attrs["crs_wkt"] = gi.get_crs_wkt_str()
+    dataset.attrs["Conventions"] = "CF-1.13-draft"
+    # dataset.attrs["title"] = ""
+    # dataset.attrs["history"] = ""
+    # dataset.attrs["source"] = ""
+    # dataset.attrs["references"] = ""
+    # dataset.attrs["institution"] = ""
+    # dataset.attrs["comment"] = ""
     return dataset
 
 
 def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single raster map."""
     x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
-    is_latlon = grass_i.is_latlon()
-    if is_latlon:
-        dims = ["latitude", "longitude"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["longitude"] = x_coords
-        coordinates["latitude"] = y_coords
-    else:
-        dims = ["y", "x"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["x"] = x_coords
-        coordinates["y"] = y_coords
+    dims = ["y", "x"]
+    coordinates = dict.fromkeys(dims)
+    coordinates["x"] = x_coords
+    coordinates["y"] = y_coords
     raster_array = grass_i.read_raster_map(raster_name)
     data_array = xr.DataArray(
         raster_array,
@@ -284,23 +285,26 @@ def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray
         dims=dims,
         name=grass_i.get_name_from_id(raster_name),
     )
-    return data_array
+    # Add CF attributes
+    r_infos = grass_i.get_raster_info(raster_name)
+    print(f"{r_infos=}")
+    da_with_attrs = set_cf_coordinates(data_array, gi=grass_i, is_3d=False)
+    da_with_attrs.attrs["long_name"] = r_infos.get("title", "")
+    da_with_attrs.attrs["source"] = ",".join([r_infos["source1"], r_infos["source2"]])
+    da_with_attrs.attrs["units"] = r_infos.get("units", "")
+    da_with_attrs.attrs["comment"] = r_infos.get("comments", "")
+    # CF attributes "institution" and "references"
+    # Do not correspond to a direct GRASS value.
+    return da_with_attrs
 
 
 def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a single 3D raster map."""
     x_coords, y_coords, z_coords = get_coordinates(grass_i, raster_3d=True).values()
-    is_latlon = grass_i.is_latlon()
-    if is_latlon:
-        dims = ["z", "latitude_3d", "longitude_3d"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["longitude_3d"] = x_coords
-        coordinates["latitude_3d"] = y_coords
-    else:
-        dims = ["z", "y_3d", "x_3d"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["x_3d"] = x_coords
-        coordinates["y_3d"] = y_coords
+    dims = ["z", "y_3d", "x_3d"]
+    coordinates = dict.fromkeys(dims)
+    coordinates["x_3d"] = x_coords
+    coordinates["y_3d"] = y_coords
     coordinates["z"] = z_coords
     raster_array = grass_i.read_raster3d_map(raster_3d_name)
 
@@ -310,31 +314,86 @@ def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.Dat
         dims=dims,
         name=grass_i.get_name_from_id(raster_3d_name),
     )
-    return data_array
+    # Add CF attributes
+    r3_infos = grass_i.get_raster3d_info(raster_3d_name)
+    da_with_attrs = set_cf_coordinates(
+        data_array, gi=grass_i, is_3d=True, z_unit=r3_infos["vertical_units"]
+    )
+    da_with_attrs.attrs["long_name"] = r3_infos.get("title", "")
+    da_with_attrs.attrs["source"] = ",".join([r3_infos["source1"], r3_infos["source2"]])
+    da_with_attrs.attrs["units"] = r3_infos.get("units", "")
+    da_with_attrs.attrs["comment"] = r3_infos.get("comments", "")
+    # CF attributes "institution" and "references"
+    # Do not correspond to a direct GRASS value.
+    return da_with_attrs
+
+
+def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
+    """must be called from within a grass session
+    TODO: add unit, description etc. as attributes
+    TODO: lazy loading
+    """
+    x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
+    strds_infos = grass_i.get_stds_infos(strds_name, stds_type="strds")
+    if strds_infos.temporal_type == "absolute":
+        start_time_dim = "start_time"
+        end_time_dim = "end_time"
+        time_unit = None
+    else:
+        time_unit = strds_infos.time_unit
+        start_time_dim = f"start_time_{time_unit}"
+        end_time_dim = f"end_time_{time_unit}"
+    dims = [start_time_dim, "y", "x"]
+    coordinates = dict.fromkeys(dims)
+    coordinates["x"] = x_coords
+    coordinates["y"] = y_coords
+    map_list = grass_i.list_maps_in_strds(strds_name)
+    array_list = []
+    for map_data in map_list:
+        coordinates[start_time_dim] = [map_data.start_time]
+        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
+        ndarray = grass_i.read_raster_map(map_data.id)
+        # add time dimension at the beginning
+        ndarray = np.expand_dims(ndarray, axis=0)
+        data_array = xr.DataArray(
+            ndarray,
+            coords=coordinates,
+            dims=dims,
+            name=grass_i.get_name_from_id(strds_name),
+        )
+        array_list.append(data_array)
+    da_concat = xr.concat(array_list, dim=start_time_dim)
+    # Add CF attributes
+    r_infos = grass_i.get_raster_info(map_list[0].id)
+    da_with_attrs = set_cf_coordinates(
+        da_concat, gi=grass_i, is_3d=False, time_dim=start_time_dim, time_unit=time_unit
+    )
+    da_with_attrs.attrs["long_name"] = strds_infos.title
+    da_with_attrs.attrs["source"] = ",".join([r_infos["source1"], r_infos["source2"]])
+    da_with_attrs.attrs["units"] = r_infos.get("units", "")
+    da_with_attrs.attrs["comment"] = r_infos.get("comments", "")
+    # CF attributes "institution" and "references"
+    # Do not correspond to a direct GRASS value.
+    return da_with_attrs
 
 
 def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """Open a series of 3D raster maps.
     TODO: Figure out what to do when the z value of the maps is time."""
     x_coords, y_coords, z_coords = get_coordinates(grass_i, raster_3d=True).values()
-    is_latlon = grass_i.is_latlon()
     strds_infos = grass_i.get_stds_infos(str3ds_name, stds_type="str3ds")
     if strds_infos.temporal_type == "absolute":
         start_time_dim = "start_time"
         end_time_dim = "end_time"
+        time_unit = None
     else:
-        start_time_dim = f"start_time_{strds_infos.time_unit}"
-        end_time_dim = f"end_time_{strds_infos.time_unit}"
-    if is_latlon:
-        dims = [start_time_dim, "z", "latitude_3d", "longitude_3d"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["longitude_3d"] = x_coords
-        coordinates["latitude_3d"] = y_coords
-    else:
-        dims = [start_time_dim, "z", "y_3d", "x_3d"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["x_3d"] = x_coords
-        coordinates["y_3d"] = y_coords
+        time_unit = strds_infos.time_unit
+        start_time_dim = f"start_time_{time_unit}"
+        end_time_dim = f"end_time_{time_unit}"
+    dims = [start_time_dim, "z", "y_3d", "x_3d"]
+    coordinates = dict.fromkeys(dims)
+    coordinates["x_3d"] = x_coords
+    coordinates["y_3d"] = y_coords
     coordinates["z"] = z_coords
     map_list = grass_i.list_maps_in_str3ds(str3ds_name)
     array_list = []
@@ -351,49 +410,72 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
             name=grass_i.get_name_from_id(str3ds_name),
         )
         array_list.append(data_array)
-    return xr.concat(array_list, dim=start_time_dim)
+
+    da_concat = xr.concat(array_list, dim=start_time_dim)
+    # Add CF attributes
+    r3_infos = grass_i.get_raster3d_info(map_list[0].id)
+    da_with_attrs = set_cf_coordinates(
+        da_concat,
+        gi=grass_i,
+        is_3d=True,
+        z_unit=r3_infos["vertical_units"],
+        time_dim=start_time_dim,
+        time_unit=time_unit,
+    )
+    da_with_attrs.attrs["long_name"] = strds_infos.title
+    da_with_attrs.attrs["source"] = ",".join([r3_infos["source1"], r3_infos["source2"]])
+    da_with_attrs.attrs["units"] = r3_infos.get("units", "")
+    da_with_attrs.attrs["comment"] = r3_infos.get("comments", "")
+    # CF attributes "institution" and "references"
+    # Do not correspond to a direct GRASS value.
+    return da_with_attrs
 
 
-def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
-    """must be called from within a grass session
-    TODO: add unit, description etc. as attributes
-    TODO: lazy loading
-    """
-    x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
-    is_latlon = grass_i.is_latlon()
-    strds_infos = grass_i.get_stds_infos(strds_name, stds_type="strds")
-    if strds_infos.temporal_type == "absolute":
-        start_time_dim = "start_time"
-        end_time_dim = "end_time"
+def set_cf_coordinates(
+    da: xr.DataArray,
+    gi: GrassInterface,
+    is_3d: bool,
+    z_unit: str = "",
+    time_dim: str = "",
+    time_unit: str = "",
+):
+    """Set coordinate attributes according to CF conventions"""
+    spatial_unit = gi.get_spatial_units()
+    if is_3d:
+        da["z"].attrs["positive"] = "up"
+        da["z"].attrs["axis"] = "Z"
+        da["z"].attrs["units"] = z_unit
+        y_coord = "y_3d"
+        x_coord = "x_3d"
     else:
-        start_time_dim = f"start_time_{strds_infos.time_unit}"
-        end_time_dim = f"end_time_{strds_infos.time_unit}"
-    if is_latlon:
-        dims = [start_time_dim, "latitude", "longitude"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["longitude"] = x_coords
-        coordinates["latitude"] = y_coords
+        y_coord = "y"
+        x_coord = "x"
+    if time_dim:
+        da[time_dim].attrs["axis"] = "T"
+        da[time_dim].attrs["standard_name"] = "time"
+    if time_unit:
+        da[time_dim].attrs["units"] = time_unit
+    da[x_coord].attrs["axis"] = "X"
+    da[y_coord].attrs["axis"] = "Y"
+    if gi.is_latlon():
+        da[x_coord].attrs["long_name"] = "longitude"
+        da[x_coord].attrs["units"] = "degrees_east"
+        da[x_coord].attrs["standard_name"] = "longitude"
+        da[y_coord].attrs["long_name"] = "latitude"
+        da[y_coord].attrs["units"] = "degrees_north"
+        da[y_coord].attrs["standard_name"] = "latitude"
     else:
-        dims = [start_time_dim, "y", "x"]
-        coordinates = dict.fromkeys(dims)
-        coordinates["x"] = x_coords
-        coordinates["y"] = y_coords
-    map_list = grass_i.list_maps_in_strds(strds_name)
-    array_list = []
-    for map_data in map_list:
-        coordinates[start_time_dim] = [map_data.start_time]
-        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
-        ndarray = grass_i.read_raster_map(map_data.id)
-        # add time dimension at the beginning
-        ndarray = np.expand_dims(ndarray, axis=0)
-        data_array = xr.DataArray(
-            ndarray,
-            coords=coordinates,
-            dims=dims,
-            name=grass_i.get_name_from_id(strds_name),
-        )
-        array_list.append(data_array)
-    return xr.concat(array_list, dim=start_time_dim)
+        da[x_coord].attrs["long_name"] = "x-coordinate in Cartesian system"
+        da[y_coord].attrs["long_name"] = "y-coordinate in Cartesian system"
+        if gi.is_xy():
+            da[x_coord].attrs["standard_name"] = "x_coordinate"
+            da[y_coord].attrs["standard_name"] = "y_coordinate"
+        else:
+            da[x_coord].attrs["standard_name"] = "projection_x_coordinate"
+            da[y_coord].attrs["standard_name"] = "projection_y_coordinate"
+            da[x_coord].attrs["units"] = spatial_unit
+            da[y_coord].attrs["units"] = spatial_unit
+    return da
 
 
 class GrassBackendArray(BackendArray):

@@ -49,6 +49,23 @@ If run from within GRASS, only maps from accessible mapsets could be loaded.
 In GRASS, you can list the accessible mapsets with `g.mapsets`.
 
 
+## CF conventions attributes mapping
+
+### DataArray attributes
+
+|CF name  |Origin in GRASS|
+|---------|---------------|
+|long_name|The "title" field from "r.info", "r3.info", or "t.info"|
+|source   |Concatenation of "source1" and "source2" from "r.info" or "r3.info". In case of STDS, taken from the first map.|
+|units    |The "unit" field from "r.info" or "r3.info". In case of STDS, taken from the first map.|
+|comment  |The "comments" field from "r.info" or "r3.info". In case of STDS, taken from the first map.|
+
+The attributes of the coordinates are in line with CF Conventions.
+
+### Dataset attributes
+
+The only attributes set at the dataset level are `crs_wkt` and `Conventions`.
+
 ## Roadmap
 
 ### Goals for version 1.0
