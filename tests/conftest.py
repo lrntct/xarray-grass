@@ -110,7 +110,15 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
 @pytest.fixture(scope="function")
 def grass_test_region(grass_session_fixture):
     """A test region fixture to make sure the tests are run in a predictable region"""
+    # Save current region
+    gs.run_command("g.region", save="test_backup_region")
+    # Set test region
     gs.run_command("g.region", flags="o", b=0, t=1500, res3=500, res=500)
+    yield
+    # Restore original region
+    gs.run_command("g.region", region="test_backup_region")
+    # Clean up the saved region
+    gs.run_command("g.remove", type="region", name="test_backup_region", flags="f")
 
 
 @pytest.fixture(scope="class")
