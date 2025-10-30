@@ -252,12 +252,14 @@ def open_grass_maps(
         # Open all given maps and identify non-existent data
         not_found = {config["not_found_key"]: [] for config in map_processing_configs}
         data_array_list = []
+        raw_coords_list = []
         for config in map_processing_configs:
             for map_name in config["input_list"]:
                 if not config["existence_check_method"](map_name):
                     not_found[config["not_found_key"]].append(map_name)
                     continue
                 data_array = config["open_function"](map_name, gi)
+                raw_coords_list.append(data_array.coords)
                 data_array_list.append(data_array)
         if raise_on_not_found and any(not_found.values()):
             raise ValueError(f"Objects not found: {not_found}")
@@ -265,15 +267,25 @@ def open_grass_maps(
         if session is not None:
             session.__exit__(None, None, None)
 
-    dataset = xr.merge(data_array_list)
-    dataset.attrs["crs_wkt"] = gi.get_crs_wkt_str()
-    dataset.attrs["Conventions"] = "CF-1.13-draft"
-    # dataset.attrs["title"] = ""
-    # dataset.attrs["history"] = ""
-    # dataset.attrs["source"] = ""
-    # dataset.attrs["references"] = ""
-    # dataset.attrs["institution"] = ""
-    # dataset.attrs["comment"] = ""
+    # TODO: time coordinates must be merged
+    coords_dict = {}
+    for i, coords in enumerate(raw_coords_list):
+        for k, v in coords.items():
+            coords_dict[k] = v
+
+    data_array_dict = {da.name: da for da in data_array_list}
+
+    attrs = {
+        "crs_wkt": gi.get_crs_wkt_str(),
+        "Conventions": "CF-1.13-draft",
+        # "title": "",
+        # "history": "",
+        # "source": "",
+        # "references": "",
+        # "institution": "",
+        # "comment": "",
+    }
+    dataset = xr.Dataset(data_vars=data_array_dict, coords=coords_dict, attrs=attrs)
     return dataset
 
 
@@ -370,7 +382,11 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     # Add CF attributes
     r_infos = grass_i.get_raster_info(map_list[0].id)
     da_with_attrs = set_cf_coordinates(
-        da_concat, gi=grass_i, is_3d=False, time_dim=start_time_dim, time_unit=time_unit
+        da_concat,
+        gi=grass_i,
+        is_3d=False,
+        time_dims=[start_time_dim, end_time_dim],
+        time_unit=time_unit,
     )
     da_with_attrs.attrs["long_name"] = strds_infos.title
     da_with_attrs.attrs["source"] = ",".join([r_infos["source1"], r_infos["source2"]])
@@ -423,7 +439,7 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
         gi=grass_i,
         is_3d=True,
         z_unit=r3_infos["vertical_units"],
-        time_dim=start_time_dim,
+        time_dims=[start_time_dim, end_time_dim],
         time_unit=time_unit,
     )
     da_with_attrs.attrs["long_name"] = strds_infos.title
@@ -440,7 +456,7 @@ def set_cf_coordinates(
     gi: GrassInterface,
     is_3d: bool,
     z_unit: str = "",
-    time_dim: str = "",
+    time_dims: Optional[list[str, str]] = None,
     time_unit: str = "",
 ):
     """Set coordinate attributes according to CF conventions"""
@@ -454,11 +470,11 @@ def set_cf_coordinates(
     else:
         y_coord = "y"
         x_coord = "x"
-    if time_dim:
-        da[time_dim].attrs["axis"] = "T"
-        da[time_dim].attrs["standard_name"] = "time"
-    if time_unit:
-        da[time_dim].attrs["units"] = time_unit
+    if time_dims is not None:
+        for time_dim in time_dims:
+            da[time_dim].attrs["axis"] = "T"
+            da[time_dim].attrs["standard_name"] = "time"
+            da[time_dim].attrs["units"] = time_unit
     da[x_coord].attrs["axis"] = "X"
     da[y_coord].attrs["axis"] = "Y"
     if gi.is_latlon():
