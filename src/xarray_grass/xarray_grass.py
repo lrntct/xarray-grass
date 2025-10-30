@@ -287,7 +287,6 @@ def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray
     )
     # Add CF attributes
     r_infos = grass_i.get_raster_info(raster_name)
-    print(f"{r_infos=}")
     da_with_attrs = set_cf_coordinates(data_array, gi=grass_i, is_3d=False)
     da_with_attrs.attrs["long_name"] = r_infos.get("title", "")
     da_with_attrs.attrs["source"] = ",".join([r_infos["source1"], r_infos["source2"]])
@@ -330,7 +329,6 @@ def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.Dat
 
 def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """must be called from within a grass session
-    TODO: add unit, description etc. as attributes
     TODO: lazy loading
     """
     x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()

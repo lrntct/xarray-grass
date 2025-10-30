@@ -5,4 +5,4 @@ from xarray_grass.xarray_grass import GrassBackendArray as GrassBackendArray
 from xarray_grass.to_grass import to_grass as to_grass
 from xarray_grass.coord_utils import RegionData as RegionData
 
-__version__ = "0.2.0"
+__version__ = "0.4.0"
