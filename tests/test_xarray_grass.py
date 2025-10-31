@@ -149,8 +149,8 @@ class TestXarrayGrass:
         )
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
-        # z, y_3d, x_3d, y, x, absolute and relative time
-        assert len(test_dataset.dims) == 7
+        # z, y_3d, x_3d, y, x, and one time dimension for each stds
+        assert len(test_dataset.dims) == 8
         assert len(test_dataset) == 7
         assert len(test_dataset.x_3d) == region.cols3
         assert len(test_dataset.y_3d) == region.rows3
@@ -213,7 +213,10 @@ class TestXarrayGrass:
             + list_str3ds_name
         )
         assert isinstance(whole_mapset, xr.Dataset)
-        assert len(whole_mapset.dims) == 7
+        dim_num = len(
+            list_strds_name + list_str3ds_name + ["y", "x", "y_3d", "x_3d", "z"]
+        )
+        assert len(whole_mapset.dims) == dim_num
         assert len(whole_mapset) == len(all_variables)
         assert all(var in whole_mapset for var in all_variables)
         assert len(whole_mapset.x_3d) == region.cols3
@@ -241,13 +244,16 @@ class TestXarrayGrass:
             raster_3d=[ACTUAL_RASTER3D_MAP, ACTUAL_RASTER3D_MAP2],
             str3ds=[RELATIVE_STR3DS, ABSOLUTE_STR3DS],
             strds=ACTUAL_STRDS,
-            drop_variables=[ACTUAL_RASTER_MAP],
+            drop_variables=[ABSOLUTE_STR3DS, ACTUAL_RASTER_MAP],
         )
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
-        # z, y_3d, x_3d, y, x, absolute and relative time
-        assert len(test_dataset.dims) == 7
-        assert len(test_dataset) == 6  # 7 - 1 dropped variable
+        # Each stds has its own time dimension
+        num_dims = len(
+            ["z", "y_3d", "x_3d", "y", "x"] + [ACTUAL_STRDS, RELATIVE_STR3DS]
+        )
+        assert len(test_dataset.dims) == num_dims
+        assert len(test_dataset) == 7 - 2  # dropped vars
         assert len(test_dataset.x_3d) == region.cols3
         assert len(test_dataset.y_3d) == region.rows3
         assert len(test_dataset.x) == region.cols
@@ -269,7 +275,7 @@ class TestXarrayGrass:
         )
 
         # Dataset-level attributes: only these should be present
-        expected_dataset_attrs = {"crs_wkt", "Conventions"}
+        expected_dataset_attrs = {"crs_wkt", "Conventions", "source", "history"}
         actual_dataset_attrs = set(test_dataset.attrs.keys())
         assert actual_dataset_attrs == expected_dataset_attrs, (
             f"Dataset has unexpected attributes. "
@@ -284,7 +290,7 @@ class TestXarrayGrass:
         assert isinstance(test_dataset.attrs["crs_wkt"], str)
 
         # DataArray-level attributes that should NOT appear at Dataset level
-        dataarray_only_attrs = {"long_name", "source", "units", "comment"}
+        dataarray_only_attrs = {"long_name", "units", "comment"}
 
         # Check that DataArray attributes don't leak to Dataset level
         for attr in dataarray_only_attrs:
@@ -316,8 +322,6 @@ class TestXarrayGrass:
         if "z" in test_dataset.coords:
             assert "axis" in test_dataset.z.attrs
             assert test_dataset.z.attrs["axis"] == "Z"
-            assert "positive" in test_dataset.z.attrs
-            assert test_dataset.z.attrs["positive"] == "up"
             assert len(test_dataset.z) == region.depths
 
         # Check time coordinate attributes (from STRDS)

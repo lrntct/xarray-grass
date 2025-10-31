@@ -103,6 +103,39 @@ def grass_session_fixture(temp_gisdb: GrassConfig):
         gen_str3ds(temporal_type="relative")
         gen_str3ds(temporal_type="absolute")
 
+        # Add custom str3ds with specific absolute times
+        gen_str3ds_custom_absolute(
+            start_times=[
+                "2014-10-01 00:10:10",
+                "2015-10-01 01:11:59",
+                "2017-06-01 18:13:56",
+            ],
+            end_times=[
+                "2015-09-01 05:11:23",
+                "2017-06-01 18:13:56",
+                "2018-02-01 13:10:45.67",
+            ],
+            str3ds_name="test_str3ds_custom_absolute",
+        )
+
+        # Add strds with relative times in seconds
+        gen_strds_relative(
+            start_times=[0, 1000, 1500],
+            end_times=[1000, 1500, 3600],
+            time_unit="seconds",
+            strds_name="test_strds_relative_seconds",
+            seed_add=200,
+        )
+
+        # Add strds with relative times in days
+        gen_strds_relative(
+            start_times=[30, 76, 78],
+            end_times=[76, 78, 90],
+            time_unit="days",
+            strds_name="test_strds_relative_days",
+            seed_add=300,
+        )
+
         yield session
         session.close()
 
@@ -151,7 +184,6 @@ def gen_str3ds(
         semantic="mean",
     )
     # create MapDataset objects list
-    str3ds_length = 10
     map_dts_lst = []
     for i, map_time in enumerate(str3ds_times):
         # Generate random map. Given seed for reproducibility
@@ -179,6 +211,107 @@ def gen_str3ds(
     # Finally register the maps
     tgis.register.register_map_object_list(
         type="raster3d",
+        map_list=map_dts_lst,
+        output_stds=stds,
+        delete_empty=False,
+        unit=time_unit,
+    )
+    return stds
+
+
+def gen_str3ds_custom_absolute(
+    start_times: list, end_times: list, str3ds_name: str = "test_str3ds_custom_absolute"
+) -> tgis.Raster3DDataset:
+    """Generate a synthetic str3ds with custom absolute start and end times."""
+    grass_i = GrassInterface()
+
+    # Parse datetime strings to datetime objects
+    start_dts = [datetime.fromisoformat(t.replace(" ", "T")) for t in start_times]
+    end_dts = [datetime.fromisoformat(t.replace(" ", "T")) for t in end_times]
+
+    # Create the str3ds
+    stds_id = grass_i.get_id_from_name(str3ds_name)
+    stds = tgis.open_new_stds(
+        name=stds_id,
+        type="str3ds",
+        temporaltype="absolute",
+        title="",
+        descr="",
+        semantic="mean",
+    )
+
+    # Create MapDataset objects list
+    map_dts_lst = []
+    for i, (start_time, end_time) in enumerate(zip(start_dts, end_dts)):
+        # Generate random map. Given seed for reproducibility
+        formatted_date = start_time.strftime("%Y%m%d_%H%M%S")
+        map_name = f"test3d_abs_{formatted_date}"
+        gs.raster3d.mapcalc3d(exp=f"{map_name}=rand(10,100)", seed=i + 100)
+
+        # Create MapDataset
+        map_id = grass_i.get_id_from_name(map_name)
+        map_dts = tgis.Raster3DDataset(map_id)
+        # Load spatial data from map
+        map_dts.load()
+        # Set time
+        map_dts.set_absolute_time(start_time=start_time, end_time=end_time)
+        # Populate the list
+        map_dts_lst.append(map_dts)
+
+    # Finally register the maps
+    tgis.register.register_map_object_list(
+        type="raster3d",
+        map_list=map_dts_lst,
+        output_stds=stds,
+        delete_empty=False,
+        unit="",
+    )
+    return stds
+
+
+def gen_strds_relative(
+    start_times: list,
+    end_times: list,
+    time_unit: str,
+    strds_name: str,
+    seed_add: int = 200,
+) -> tgis.RasterDataset:
+    """Generate a synthetic strds with relative times in seconds."""
+    grass_i = GrassInterface()
+
+    # Create the strds
+    stds_id = grass_i.get_id_from_name(strds_name)
+    stds = tgis.open_new_stds(
+        name=stds_id,
+        type="strds",
+        temporaltype="relative",
+        title="",
+        descr="",
+        semantic="mean",
+    )
+
+    # Create MapDataset objects list
+    map_dts_lst = []
+    for i, (start_time, end_time) in enumerate(zip(start_times, end_times)):
+        # Generate random map
+        map_name = f"test_raster_sec_{start_time}"
+        gs.mapcalc(exp=f"{map_name}=rand(0,100)", seed=i + seed_add)
+
+        # Create MapDataset
+        map_id = grass_i.get_id_from_name(map_name)
+        map_dts = tgis.RasterDataset(map_id)
+        # Load spatial data from map
+        map_dts.load()
+        # Set time
+        map_dts.set_relative_time(
+            start_time=start_time, end_time=end_time, unit=time_unit
+        )
+        # Populate the list
+        map_dts_lst.append(map_dts)
+
+    # Finally register the maps
+    tgis.register.register_map_object_list(
+        type="raster",
         map_list=map_dts_lst,
         output_stds=stds,
         delete_empty=False,
