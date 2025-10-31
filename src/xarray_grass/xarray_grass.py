@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 import os
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 from xarray.backends import BackendEntrypoint
@@ -44,10 +44,10 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         self,
         filename_or_obj,
         *,
-        raster: str | Iterable[str] = [],
-        raster_3d: str | Iterable[str] = [],
-        strds: str | Iterable[str] = [],
-        str3ds: str | Iterable[str] = [],
+        raster: Optional[str | Iterable[str]] = None,
+        raster_3d: Optional[str | Iterable[str]] = None,
+        strds: Optional[str | Iterable[str]] = None,
+        str3ds: Optional[str | Iterable[str]] = None,
         drop_variables: Iterable[str],
     ) -> xr.Dataset:
         """Open GRASS project or mapset as an xarray.Dataset.
@@ -69,13 +69,19 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             for strds_name in grass_objects["strds"]:
                 maps_in_strds = gi.list_maps_in_strds(strds_name)
                 rasters_in_strds.extend([map_data.id for map_data in maps_in_strds])
-                open_func_params["strds_list"].append(strds_name)
+                if open_func_params["strds_list"] is None:
+                    open_func_params["strds_list"] = [strds_name]
+                else:
+                    open_func_params["strds_list"].append(strds_name)
             raster3ds_in_str3ds = []
             # str3ds
             for str3ds_name in grass_objects["str3ds"]:
                 maps_in_str3ds = gi.list_maps_in_str3ds(str3ds_name)
                 raster3ds_in_str3ds.extend([map_data.id for map_data in maps_in_str3ds])
-                open_func_params["str3ds_list"].append(str3ds_name)
+                if open_func_params["str3ds_list"] is None:
+                    open_func_params["str3ds_list"] = [str3ds_name]
+                else:
+                    open_func_params["str3ds_list"].append(str3ds_name)
             # rasters not in strds
             open_func_params["raster_list"] = [
                 name for name in grass_objects["raster"] if name not in rasters_in_strds
@@ -287,7 +293,6 @@ def open_grass_raster(raster_name: str, grass_i: GrassInterface) -> xr.DataArray
     )
     # Add CF attributes
     r_infos = grass_i.get_raster_info(raster_name)
-    print(f"{r_infos=}")
     da_with_attrs = set_cf_coordinates(data_array, gi=grass_i, is_3d=False)
     da_with_attrs.attrs["long_name"] = r_infos.get("title", "")
     da_with_attrs.attrs["source"] = ",".join([r_infos["source1"], r_infos["source2"]])
@@ -330,7 +335,6 @@ def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.Dat
 
 def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     """must be called from within a grass session
-    TODO: add unit, description etc. as attributes
     TODO: lazy loading
     """
     x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
