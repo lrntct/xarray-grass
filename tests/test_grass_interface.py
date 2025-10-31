@@ -36,8 +36,21 @@ TestCase = namedtuple("TestCase", ["np_dtype", "g_dtype", "map_name"])
 
 
 def test_no_grass_session():
-    with pytest.raises(RuntimeError):
-        GrassInterface()
+    """Test that GrassInterface raises RuntimeError when no GRASS session exists.
+    This test must clear GISRC to ensure isolation from other tests that may have
+    set up a GRASS session.
+    """
+    import os
+
+    # Save and clear GISRC to ensure no session exists
+    original_gisrc = os.environ.pop("GISRC", None)
+    try:
+        with pytest.raises(RuntimeError):
+            GrassInterface()
+    finally:
+        # Restore GISRC if it was set
+        if original_gisrc is not None:
+            os.environ["GISRC"] = original_gisrc
 
 
 @pytest.mark.usefixtures("grass_session_fixture")

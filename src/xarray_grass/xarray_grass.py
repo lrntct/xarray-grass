@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 import os
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 from xarray.backends import BackendEntrypoint
@@ -44,10 +44,10 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         self,
         filename_or_obj,
         *,
-        raster: str | Iterable[str] = [],
-        raster_3d: str | Iterable[str] = [],
-        strds: str | Iterable[str] = [],
-        str3ds: str | Iterable[str] = [],
+        raster: Optional[str | Iterable[str]] = None,
+        raster_3d: Optional[str | Iterable[str]] = None,
+        strds: Optional[str | Iterable[str]] = None,
+        str3ds: Optional[str | Iterable[str]] = None,
         drop_variables: Iterable[str],
     ) -> xr.Dataset:
         """Open GRASS project or mapset as an xarray.Dataset.
@@ -69,13 +69,19 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             for strds_name in grass_objects["strds"]:
                 maps_in_strds = gi.list_maps_in_strds(strds_name)
                 rasters_in_strds.extend([map_data.id for map_data in maps_in_strds])
-                open_func_params["strds_list"].append(strds_name)
+                if open_func_params["strds_list"] is None:
+                    open_func_params["strds_list"] = [strds_name]
+                else:
+                    open_func_params["strds_list"].append(strds_name)
             raster3ds_in_str3ds = []
             # str3ds
             for str3ds_name in grass_objects["str3ds"]:
                 maps_in_str3ds = gi.list_maps_in_str3ds(str3ds_name)
                 raster3ds_in_str3ds.extend([map_data.id for map_data in maps_in_str3ds])
-                open_func_params["str3ds_list"].append(str3ds_name)
+                if open_func_params["str3ds_list"] is None:
+                    open_func_params["str3ds_list"] = [str3ds_name]
+                else:
+                    open_func_params["str3ds_list"].append(str3ds_name)
             # rasters not in strds
             open_func_params["raster_list"] = [
                 name for name in grass_objects["raster"] if name not in rasters_in_strds
