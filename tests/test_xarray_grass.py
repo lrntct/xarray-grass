@@ -149,8 +149,8 @@ class TestXarrayGrass:
         )
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
-        # z, y_3d, x_3d, y, x, absolute and relative time
-        assert len(test_dataset.dims) == 7
+        # z, y_3d, x_3d, y, x, and one time dimension for each stds
+        assert len(test_dataset.dims) == 8
         assert len(test_dataset) == 7
         assert len(test_dataset.x_3d) == region.cols3
         assert len(test_dataset.y_3d) == region.rows3
@@ -213,7 +213,10 @@ class TestXarrayGrass:
             + list_str3ds_name
         )
         assert isinstance(whole_mapset, xr.Dataset)
-        assert len(whole_mapset.dims) == 7
+        dim_num = len(
+            list_strds_name + list_str3ds_name + ["y", "x", "y_3d", "x_3d", "z"]
+        )
+        assert len(whole_mapset.dims) == dim_num
         assert len(whole_mapset) == len(all_variables)
         assert all(var in whole_mapset for var in all_variables)
         assert len(whole_mapset.x_3d) == region.cols3
@@ -241,15 +244,103 @@ class TestXarrayGrass:
             raster_3d=[ACTUAL_RASTER3D_MAP, ACTUAL_RASTER3D_MAP2],
             str3ds=[RELATIVE_STR3DS, ABSOLUTE_STR3DS],
             strds=ACTUAL_STRDS,
-            drop_variables=[ACTUAL_RASTER_MAP],
+            drop_variables=[ABSOLUTE_STR3DS, ACTUAL_RASTER_MAP],
         )
         region = grass_i.get_region()
         assert isinstance(test_dataset, xr.Dataset)
-        # z, y_3d, x_3d, y, x, absolute and relative time
-        assert len(test_dataset.dims) == 7
-        assert len(test_dataset) == 6  # 7 - 1 dropped variable
+        # Each stds has its own time dimension
+        num_dims = len(
+            ["z", "y_3d", "x_3d", "y", "x"] + [ACTUAL_STRDS, RELATIVE_STR3DS]
+        )
+        assert len(test_dataset.dims) == num_dims
+        assert len(test_dataset) == 7 - 2  # dropped vars
         assert len(test_dataset.x_3d) == region.cols3
         assert len(test_dataset.y_3d) == region.rows3
         assert len(test_dataset.x) == region.cols
         assert len(test_dataset.y) == region.rows
+
+    def test_attributes_separation(self, grass_i, temp_gisdb) -> None:
+        """Test that DataArray attributes don't leak to Dataset level."""
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        region = grass_i.get_region()
+
+        # Test with multiple types of data to ensure attributes are handled correctly
+        test_dataset = xr.open_dataset(
+            mapset_path,
+            raster=ACTUAL_RASTER_MAP,
+            raster_3d=ACTUAL_RASTER3D_MAP,
+            strds=ACTUAL_STRDS,
+        )
+
+        # Dataset-level attributes: only these should be present
+        expected_dataset_attrs = {"crs_wkt", "Conventions", "source", "history"}
+        actual_dataset_attrs = set(test_dataset.attrs.keys())
+        assert actual_dataset_attrs == expected_dataset_attrs, (
+            f"Dataset has unexpected attributes. "
+            f"Expected: {expected_dataset_attrs}, "
+            f"Got: {actual_dataset_attrs}"
+        )
+
+        # Verify Dataset attrs have correct values
+        assert "Conventions" in test_dataset.attrs
+        assert test_dataset.attrs["Conventions"] == "CF-1.13-draft"
+        assert "crs_wkt" in test_dataset.attrs
+        assert isinstance(test_dataset.attrs["crs_wkt"], str)
+
+        # DataArray-level attributes that should NOT appear at Dataset level
+        dataarray_only_attrs = {"long_name", "units", "comment"}
+
+        # Check that DataArray attributes don't leak to Dataset level
+        for attr in dataarray_only_attrs:
+            assert attr not in test_dataset.attrs, (
+                f"DataArray attribute '{attr}' should not appear at Dataset level"
+            )
+
+        # Verify each DataArray has its own attributes
+        for var_name in test_dataset.data_vars:
+            data_array = test_dataset[var_name]
+
+            # Each DataArray should have at least some of these attributes
+            # (depending on the data source, some might be empty strings)
+            for attr in ["long_name", "source", "units"]:
+                assert attr in data_array.attrs, (
+                    f"DataArray '{var_name}' missing expected attribute '{attr}'"
+                )
+
+        # Verify coordinate attributes are set correctly (these are set by set_cf_coordinates)
+        # Check x coordinate
+        assert "axis" in test_dataset.x.attrs
+        assert test_dataset.x.attrs["axis"] == "X"
+
+        # Check y coordinate
+        assert "axis" in test_dataset.y.attrs
+        assert test_dataset.y.attrs["axis"] == "Y"
+
+        # Check z coordinate for 3D data
+        if "z" in test_dataset.coords:
+            assert "axis" in test_dataset.z.attrs
+            assert test_dataset.z.attrs["axis"] == "Z"
+            assert len(test_dataset.z) == region.depths
+
+        # Check time coordinate attributes (from STRDS)
+        time_coords = [coord for coord in test_dataset.coords if "time" in coord]
+        assert len(time_coords) > 0, "Expected at least one time coordinate from STRDS"
+
+        for time_coord in time_coords:
+            # Time coordinates should have axis="T"
+            assert "axis" in test_dataset[time_coord].attrs
+            assert test_dataset[time_coord].attrs["axis"] == "T"
+
+            # Time coordinates should have standard_name="time"
+            assert "standard_name" in test_dataset[time_coord].attrs
+            assert test_dataset[time_coord].attrs["standard_name"] == "time"
+
+            # For relative time coordinates, units should be present
+            if time_coord.startswith("start_time_") or time_coord.startswith(
+                "end_time_"
+            ):
+                # This is a relative time coordinate, should have units
+                assert "units" in test_dataset[time_coord].attrs
         assert len(test_dataset.z) == region.depths

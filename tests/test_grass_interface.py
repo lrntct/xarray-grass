@@ -196,7 +196,13 @@ class TestGrassInterface:
 
     def test_list_strds(self):
         strds_list = GrassInterface.list_strds()
-        assert strds_list == [ACTUAL_STRDS]
+        assert ACTUAL_STRDS in strds_list
+        assert len(strds_list) == 3  # modis + 2 synthetic ones
+
+    def test_list_str3ds(self):
+        str3ds_list = GrassInterface.list_str3ds()
+        assert GrassInterface.get_id_from_name(RELATIVE_STR3DS) in str3ds_list
+        assert len(str3ds_list) == 3  # 3 synthetic str3ds
 
     def test_get_stds_infos(self, grass_i):
         strds_infos = grass_i.get_stds_infos(ACTUAL_STRDS, stds_type="strds")

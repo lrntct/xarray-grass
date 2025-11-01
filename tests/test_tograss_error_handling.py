@@ -226,8 +226,8 @@ class TestToGrassInputValidation:
         invalid_datasets = [123, "a string", [1, 2, 3], {"data": np.array([1])}, None]
         for invalid_ds in invalid_datasets:
             with pytest.raises(
-                AttributeError,
-                match=r"object has no attribute 'attrs'",
+                TypeError,
+                match=r"'dataset must be either an Xarray DataArray or Dataset",
             ):
                 to_grass(dataset=invalid_ds, mapset=str(mapset_path), create=False)
 
@@ -253,7 +253,7 @@ class TestToGrassInputValidation:
         for invalid_dims in invalid_dims_params:
             with pytest.raises(
                 TypeError,
-                match=r"dims parameter must be a mapping",  # More specific regex
+                match=r"'dims' parameter must be of type",
             ):
                 to_grass(
                     dataset=sample_da,
@@ -284,3 +284,23 @@ class TestToGrassInputValidation:
                 match=r"(mapset parameter must be a string or a Path|Invalid mapset type|argument should be a str or an os.PathLike object)",
             ):
                 to_grass(dataset=sample_da, mapset=invalid_mapset, create=True)
+
+    def test_invalid_dims_invalid_var(self, temp_gisdb, grass_i: GrassInterface):
+        session_crs_wkt = grass_i.get_crs_wkt_str()
+        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / temp_gisdb.mapset
+        sample_da = create_sample_dataarray(
+            dims_spec={"y": np.arange(2.0), "x": np.arange(2.0)},
+            shape=(2, 2),
+            crs_wkt=session_crs_wkt,
+            name="data_for_dims_validation",
+        )
+        with pytest.raises(
+            ValueError,
+            match=r"not found in the input dataset. Variables found",
+        ):
+            to_grass(
+                dataset=sample_da,
+                mapset=str(mapset_path),
+                dims={"invalid_var_name": {"x": "my_x"}},
+                create=False,
+            )
