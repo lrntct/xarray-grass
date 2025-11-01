@@ -304,10 +304,12 @@ class XarrayToGrass:
         #  TODO: reshape to match userGRASS expected dims order
         try:
             if is_raster:
+                data = self.transpose(data, dims, arr_type="raster")
                 self.grass_interface.write_raster_map(data, data.name)
             elif is_strds:
                 self._write_stds(data, dims)
             elif is_raster_3d:
+                data = self.transpose(data, dims, arr_type="raster3d")
                 self.grass_interface.write_raster3d_map(data, data.name)
             elif is_str3ds:
                 self._write_stds(data, dims)
@@ -319,6 +321,19 @@ class XarrayToGrass:
         finally:
             # Restore the original region
             self.grass_interface.set_region(current_region)
+
+    def transpose(
+        self, da: xr.DataArray, dims, arr_type: str = "raster"
+    ) -> xr.DataArray:
+        """Force dimension order to conform with grass expectation."""
+        if "raster" == arr_type:
+            return da.transpose(dims["y"], dims["x"])
+        elif "raster3d" == arr_type:
+            return da.transpose(dims["z"], dims["y_3d"], dims["x_3d"])
+        else:
+            raise ValueError(
+                f"Unknown array type: {arr_type}. Must be 'raster' or 'raster3d'."
+            )
 
     def _write_stds(self, data: xr.DataArray, dims: Mapping):
         # 1. Determine the temporal coordinate and type
@@ -337,14 +352,17 @@ class XarrayToGrass:
         # 2.5 determine if 2D or 3D
         is_3d = False
         stds_type = "strds"
+        arr_type = "raster"
         if len(data.isel({dims["start_time"]: 0}).dims) == 3:
             is_3d = True
             stds_type = "str3ds"
+            arr_type = "raster3d"
 
         # 3. Loop through the time dim:
         map_list = []
         for index, time in enumerate(time_coord):
             darray = data.sel({dims["start_time"]: time})
+            darray = self.transpose(darray, dims, arr_type=arr_type)
             nd_array = darray.values
             # 3.1 Write each map individually
             raster_name = f"{data.name}_{temporal_type}_{index}"
