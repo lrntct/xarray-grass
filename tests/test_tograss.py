@@ -400,7 +400,7 @@ class TestToGrassSuccess:
             dataset=sample_da,
             mapset=mapset_arg,
             create=False,
-            dims={"start_time": "time"},
+            dims={"test_str3ds_vol": {"start_time": "time"}},
         )
         try:
             available_str3ds = grass_i.list_str3ds()
@@ -529,7 +529,10 @@ class TestToGrassSuccess:
             dataset=sample_ds,
             mapset=mapset_arg,
             create=False,
-            dims={"start_time": "time"},
+            dims={
+                "strds_var": {"start_time": "time"},
+                "str3ds_var": {"start_time": "time"},
+            },
         )
         try:
             grass_objects = grass_i.list_grass_objects()
@@ -728,7 +731,12 @@ class TestToGrassSuccess:
         )
 
     @pytest.mark.parametrize(
-        "rename_map", [None, {"y": "northing", "x": "easting"}, {"y": "custom_y"}]
+        "rename_map",
+        [
+            None,
+            {"dims_test_raster": {"y": "northing", "x": "easting"}},
+            {"dims_test_raster": {"y": "custom_y"}},
+        ],
     )
     def test_dims_mapping(
         self,
@@ -756,7 +764,7 @@ class TestToGrassSuccess:
         )
 
         if rename_map:
-            sample_da = sample_da.rename(rename_map)
+            sample_da = sample_da.rename(rename_map[da_name])
         to_grass(
             dataset=sample_da,
             mapset=str(mapset_path),
