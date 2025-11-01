@@ -1,4 +1,3 @@
-# coding=utf8
 """
 Copyright (C) 2025 Laurent Courty
 
@@ -20,11 +19,12 @@ from typing import Iterable, Optional
 
 import numpy as np
 from xarray.backends import BackendEntrypoint
-from xarray.backends import BackendArray
 import xarray as xr
 import grass_session  # noqa: F401
+
 import xarray_grass
 from xarray_grass.grass_interface import GrassInterface
+from xarray_grass.grass_backend_array import GrassBackendArray
 
 
 class GrassBackendEntrypoint(BackendEntrypoint):
@@ -365,15 +365,30 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
     coordinates["x"] = x_coords
     coordinates["y"] = y_coords
     map_list = grass_i.list_maps_in_strds(strds_id)
+    region = grass_i.get_region()
     array_list = []
     for map_data in map_list:
+        # Lazy load the array
+        backend_array = GrassBackendArray(
+            shape=(region.rows, region.cols),
+            dtype=map_data.dtype,
+            map_id=map_data.id,
+            map_type="raster",
+            grass_interface=grass_i,
+        )
+        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        # add time dimension at the beginning
+        lazy_array_with_time = np.expand_dims(lazy_array, axis=0)
+
+        # ndarray = grass_i.read_raster_map(map_data.id)
+        # # add time dimension at the beginning
+        # ndarray = np.expand_dims(ndarray, axis=0)
+
         coordinates[start_time_dim] = [map_data.start_time]
         coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
-        ndarray = grass_i.read_raster_map(map_data.id)
-        # add time dimension at the beginning
-        ndarray = np.expand_dims(ndarray, axis=0)
+
         data_array = xr.DataArray(
-            ndarray,
+            lazy_array_with_time,
             coords=coordinates,
             dims=dims,
             name=strds_name,
@@ -417,15 +432,26 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
     coordinates["y_3d"] = y_coords
     coordinates["z"] = z_coords
     map_list = grass_i.list_maps_in_str3ds(str3ds_id)
+    region = grass_i.get_region()
     array_list = []
     for map_data in map_list:
+        # Lazy load the map
+        backend_array = GrassBackendArray(
+            shape=(region.depths, region.rows3, region.cols3),
+            dtype=map_data.dtype,
+            map_id=map_data.id,
+            map_type="raster3d",
+            grass_interface=grass_i,
+        )
+        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        # add time dimension at the beginning
+        lazy_array_with_time = np.expand_dims(lazy_array, axis=0)
+
         coordinates[start_time_dim] = [map_data.start_time]
         coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
-        ndarray = grass_i.read_raster3d_map(map_data.id)
-        # add time dimension at the beginning
-        ndarray = np.expand_dims(ndarray, axis=0)
+
         data_array = xr.DataArray(
-            ndarray,
+            lazy_array_with_time,
             coords=coordinates,
             dims=dims,
             name=str3ds_name,
@@ -497,22 +523,3 @@ def set_cf_coordinates(
             da[x_coord].attrs["units"] = spatial_unit
             da[y_coord].attrs["units"] = spatial_unit
     return da
-
-
-class GrassBackendArray(BackendArray):
-    """For lazy loading"""
-
-    def __init__(
-        self,
-        shape,
-        dtype,
-        lock,
-        # other backend specific keyword arguments
-    ):
-        self.shape = shape
-        self.dtype = dtype
-        self.lock = lock
-
-    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer) -> np.typing.ArrayLike:
-        """takes in input an index and returns a NumPy array"""
-        pass

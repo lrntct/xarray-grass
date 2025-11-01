@@ -1,4 +1,3 @@
-# coding=utf8
 """
 Copyright (C) 2025 Laurent Courty
 
@@ -29,6 +28,7 @@ import grass.script as gs
 from grass.script import array as garray
 import grass.pygrass.utils as gutils
 from grass.pygrass import raster as graster
+from grass.pygrass.raster.abstract import Info
 import grass.temporal as tgis
 
 from xarray_grass.coord_utils import (
@@ -48,7 +48,8 @@ class GrassConfig:
 
 
 strds_cols = ["id", "start_time", "end_time"]
-MapData = namedtuple("MapData", strds_cols)
+MapData = namedtuple("MapData", strds_cols + ["dtype"])
+
 strds_infos = [
     "id",
     "title",
@@ -245,6 +246,8 @@ class GrassInterface(object):
         return gs.read_command("g.proj", flags="wf").replace("\n", "")
 
     def grass_dtype(self, dtype: str) -> str:
+        """Takes a numpy-style data-type description string,
+        and return a GRASS data type string."""
         if dtype in self.dtype_conv["DCELL"]:
             mtype = "DCELL"
         elif dtype in self.dtype_conv["CELL"]:
@@ -252,8 +255,20 @@ class GrassInterface(object):
         elif dtype in self.dtype_conv["FCELL"]:
             mtype = "FCELL"
         else:
-            raise ValueError("datatype incompatible with GRASS!")
+            raise ValueError(f"datatype '{dtype}' incompatible with GRASS!")
         return mtype
+
+    @staticmethod
+    def numpy_dtype(mtype: str) -> np.dtype:
+        if mtype == "CELL":
+            dtype = np.int64
+        elif mtype == "FCELL":
+            dtype = np.float32
+        elif mtype == "DCELL":
+            dtype = np.float64
+        else:
+            raise ValueError(f"Unknown GRASS data type: {mtype}")
+        return dtype
 
     @staticmethod
     def has_mask() -> bool:
@@ -293,12 +308,14 @@ class GrassInterface(object):
         return objects_dict
 
     @staticmethod
-    def get_raster_info(raster_id):
-        return gs.parse_command("r.info", map=raster_id, flags="e")
+    def get_raster_info(raster_id: str) -> Info:
+        return gs.parse_command("r.info", map=raster_id, flags="ge")
 
     @staticmethod
     def get_raster3d_info(raster3d_id):
-        return gs.parse_command("r3.info", map=raster3d_id, flags="gh")
+        result = gs.parse_command("r3.info", map=raster3d_id, flags="gh")
+        # Strip quotes from string values (r3.info -gh returns quoted strings)
+        return {k: v.strip('"') if isinstance(v, str) else v for k, v in result.items()}
 
     def get_stds_infos(self, strds_name, stds_type) -> STRDSInfos:
         strds_id = self.get_id_from_name(strds_name)
@@ -345,7 +362,12 @@ class GrassInterface(object):
             err_msg = "STR3DS <{}>: Can't find following maps: {}"
             str_lst = ",".join(maps_not_found)
             raise RuntimeError(err_msg.format(strds_name, str_lst))
-        return [MapData(*i) for i in maplist]
+        tuple_list = []
+        for i in maplist:
+            mtype = self.get_raster3d_info(i[0])["datatype"]
+            dtype = self.numpy_dtype(mtype)
+            tuple_list.append(MapData(*i, dtype=dtype))
+        return tuple_list
 
     def list_maps_in_strds(self, strds_name: str) -> list[MapData]:
         strds = tgis.open_stds.open_old_stds(strds_name, "strds")
@@ -358,7 +380,11 @@ class GrassInterface(object):
             err_msg = "STRDS <{}>: Can't find following maps: {}"
             str_lst = ",".join(maps_not_found)
             raise RuntimeError(err_msg.format(strds_name, str_lst))
-        return [MapData(*i) for i in maplist]
+        tuple_list = []
+        for i in maplist:
+            dtype = self.numpy_dtype(Info(i[0]).mtype)
+            tuple_list.append(MapData(*i, dtype=dtype))
+        return tuple_list
 
     @staticmethod
     def read_raster_map(rast_name: str) -> np.ndarray:
