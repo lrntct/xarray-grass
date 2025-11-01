@@ -32,6 +32,7 @@ def to_grass(
     dataset: xr.Dataset | xr.DataArray,
     mapset: str | Path,
     dims: Optional[Mapping[str, Mapping[str, str]]] = None,
+    overwrite: bool = False,
     create: bool = False,
 ) -> None:
     """Convert an xarray.Dataset or xarray.DataArray to GRASS GIS maps.
@@ -133,11 +134,11 @@ def to_grass(
             gisdb=str(gisdb), location=str(project_name), mapset=str(mapset)
         )
         session.__enter__()
-        gi = GrassInterface()
+        gi = GrassInterface(overwrite)
 
     else:
         # We're in an existing session, check if it matches the requested path
-        gi = GrassInterface()
+        gi = GrassInterface(overwrite)
         check_grass_session(gi, mapset_path)
 
     try:
