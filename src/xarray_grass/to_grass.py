@@ -299,9 +299,8 @@ class XarrayToGrass:
         # Set temp region
         current_region = self.grass_interface.get_region()
         temp_region = get_region_from_xarray(data, dims)
-        print(temp_region)
         self.grass_interface.set_region(temp_region)
-        #  TODO: reshape to match user dims
+        #  TODO: reshape to match userGRASS expected dims order
         try:
             if is_raster:
                 self.grass_interface.write_raster_map(data, data.name)
