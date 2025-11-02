@@ -301,7 +301,6 @@ class XarrayToGrass:
         current_region = self.grass_interface.get_region()
         temp_region = get_region_from_xarray(data, dims)
         self.grass_interface.set_region(temp_region)
-        #  TODO: reshape to match userGRASS expected dims order
         try:
             if is_raster:
                 data = self.transpose(data, dims, arr_type="raster")
