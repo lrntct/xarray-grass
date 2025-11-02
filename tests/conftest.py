@@ -165,7 +165,7 @@ def gen_str3ds(
     """Generate an synthetic str3ds."""
     grass_i = GrassInterface()
     if temporal_type == "relative":
-        time_unit = "months"
+        time_unit = "days"
         str3ds_times = [i + 1 for i in range(str3ds_length)]
     elif temporal_type == "absolute":
         time_unit = ""
@@ -325,7 +325,7 @@ def create_sample_dataarray(
     shape: tuple,
     crs_wkt: str,
     name: str = "test_data",
-    time_dim_type: str = "absolute",  # "absolute", "relative", or "none"
+    time_dim_type: str = "none",  # "absolute", "relative", or "none"
     fill_value_generator=None,
 ) -> xr.DataArray:
     """
@@ -359,9 +359,11 @@ def create_sample_dataarray(
     # Determine context for spatial dimension naming (2D or 3D)
     is_3d_spatial_context = "z" in dims_spec
 
-    for dim_key in dims_spec.keys():  # Iterate in the order provided by dims_spec
-        coord_values = dims_spec[dim_key]
+    for dim_key, coord_values in dims_spec.items():
         actual_dim_name = dim_key  # Default to key
+
+        if dim_key not in ["time", "x", "y", "z"]:
+            raise ValueError(f"Unknown dim_key: {dim_key}")
 
         if dim_key == "time":
             if time_dim_type == "absolute":
@@ -402,6 +404,8 @@ def create_sample_dataarray(
         name=name,
     )
     da.attrs["crs_wkt"] = crs_wkt
+    if time_dim_type == "relative" and "time" in dims_spec:
+        da["time"].attrs["units"] = "minutes"
     return da
 
 

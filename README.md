@@ -149,7 +149,7 @@ Attributes:
   - [x] Write to 3D raster
   - [x] Write to STR3DS
   - [x] Transpose if dimensions are not in the expected order
-  - [ ] Support time units for relative time
+  - [x] Support time units for relative time
   - [ ] Support `end_time`
   - [ ] Accept writing into a specific mapset (GRASS 8.5)
   - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)

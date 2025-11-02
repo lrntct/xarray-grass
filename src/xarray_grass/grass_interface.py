@@ -18,9 +18,11 @@ from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Self
+from typing import Self, Optional
 
 import numpy as np
+import pandas as pd
+
 
 # Needed to import grass modules
 import grass_session  # noqa: F401
@@ -436,10 +438,10 @@ class GrassInterface(object):
         semantic: str,
         t_type: str,
         stds_type: str,
+        time_unit: Optional[str] = None,
     ) -> Self:
         """Create a STDS, create one mapdataset for each map and
         register them in the temporal database.
-        TODO: add support for units other than seconds
         """
         # create stds
         stds_id = self.get_id_from_name(stds_name)
@@ -470,9 +472,11 @@ class GrassInterface(object):
             if t_type == "relative":
                 if not isinstance(map_time, timedelta):
                     raise TypeError("relative time requires a timedelta object.")
-                # TODO: support other units
-                rel_time = map_time.total_seconds()
-                map_dts.set_relative_time(rel_time, None, "seconds")
+                if not time_unit:
+                    raise TypeError("relative time requires a time_unit.")
+                # Convert timedelta to numeric value in the specified unit
+                rel_time = map_time / pd.Timedelta(1, unit=time_unit)
+                map_dts.set_relative_time(rel_time, None, time_unit)
             elif t_type == "absolute":
                 if not isinstance(map_time, datetime):
                     raise TypeError("absolute time requires a datetime object.")
@@ -484,7 +488,12 @@ class GrassInterface(object):
             # populate the list of MapDataset objects
             map_dts_lst.append(map_dts)
         # Finally register the maps
-        t_unit = {"relative": "seconds", "absolute": ""}
+        # Use provided unit for relative time, empty string for absolute
+        if t_type == "relative":
+            t_unit = time_unit
+        else:
+            t_unit = ""
+
         map_type = "raster"
         if stds_type == "str3ds":
             map_type = "raster_3d"
@@ -493,6 +502,6 @@ class GrassInterface(object):
             map_list=map_dts_lst,
             output_stds=stds,
             delete_empty=True,
-            unit=t_unit[t_type],
+            unit=t_unit,
         )
         return self
