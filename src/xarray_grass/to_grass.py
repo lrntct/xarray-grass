@@ -263,11 +263,7 @@ class XarrayToGrass:
         data: xr.DataArray,
         dims: Mapping[str, str],
     ) -> None:
-        """Convert an xarray DataArray to GRASS maps.
-
-        Uses standardized (x, y) dimension naming internally. For datasets with
-        latitude/longitude dimensions, provide explicit mapping via dims parameter.
-        """
+        """Convert an xarray DataArray to GRASS maps."""
         if len(data.dims) > 4 or len(data.dims) < 2:
             raise ValueError(
                 f"Only DataArray with 2 to 4 dimensions are supported. "
@@ -338,11 +334,25 @@ class XarrayToGrass:
         # 1. Determine the temporal coordinate and type
         time_coord = data[dims["start_time"]]
         time_dtype = time_coord.dtype
+        time_unit = None  # Initialize for absolute time case
         if isinstance(time_dtype, np.dtypes.DateTime64DType):
             temporal_type = "absolute"
         elif np.issubdtype(time_dtype, np.integer):
             temporal_type = "relative"
             time_unit = time_coord.attrs.get("units", None)
+            if not time_unit:
+                raise ValueError(
+                    f"Relative time coordinate '{dims['start_time']}' in DataArray '{data.name}' "
+                    "requires a 'units' attribute. "
+                    "Accepted values: 'days', 'hours', 'minutes', 'seconds'."
+                )
+            # Validate that the unit is supported by both pandas and GRASS
+            supported_units = ["days", "hours", "minutes", "seconds"]
+            if time_unit not in supported_units:
+                raise ValueError(
+                    f"Unsupported time unit '{time_unit}' for relative time in DataArray '{data.name}'. "
+                    f"Supported units are: {', '.join(supported_units)}. "
+                )
         else:
             raise ValueError(f"Temporal type not supported: {time_dtype}")
         # 2. Determine the semantic type
@@ -390,4 +400,5 @@ class XarrayToGrass:
             semantic=semantic_type,
             t_type=temporal_type,
             stds_type=stds_type,
+            time_unit=time_unit,
         )

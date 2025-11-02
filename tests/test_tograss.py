@@ -253,11 +253,11 @@ class TestToGrassSuccess:
             pytest.fail(f"Unsupported time_dim_type: {time_dim_type}")
 
         dims_spec_for_helper = {
-            "start_time": time_coords,
+            "time": time_coords,
             "y": np.arange(img_height, dtype=float),
             "x": np.arange(img_width, dtype=float),
         }
-        expected_dims_order_in_da = ("start_time", "y", "x")
+        expected_dims_order_in_da = ("time", "y", "x")
 
         shape = (num_times, img_height, img_width)
         session_crs_wkt = grass_i.get_crs_wkt_str()
@@ -276,6 +276,10 @@ class TestToGrassSuccess:
             f"DataArray dims {sample_da.dims} do not match expected {expected_dims_order_in_da}"
         )
 
+        # Set time unit attribute for relative time
+        if time_dim_type == "relative":
+            sample_da["time"].attrs["units"] = "days"
+
         target_mapset_name = temp_gisdb.mapset
         mapset_path_obj = (
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
@@ -286,6 +290,7 @@ class TestToGrassSuccess:
             dataset=sample_da,
             mapset=mapset_arg,
             create=False,
+            dims={"test_strds": {"start_time": "time"}},
         )
         strds_id = f"{sample_da.name}@{target_mapset_name}"
 
@@ -303,11 +308,38 @@ class TestToGrassSuccess:
                 f"Expected {num_times} maps in STRDS '{strds_id}', found {len(strds_map_names_in_grass)}."
             )
 
+            # Check temporal metadata including time units for relative time
+            t_info = gs.parse_command("t.info", input=strds_id, flags="g", quiet=True)
+
+            if time_dim_type == "relative":
+                # Verify temporal type is relative
+                assert t_info.get("temporal_type") == "relative", (
+                    f"Expected temporal_type='relative' for STRDS '{strds_id}', "
+                    f"got '{t_info.get('temporal_type')}'"
+                )
+                # Verify relative time unit is properly written to the GRASS database
+                expected_unit = sample_da["time"].attrs.get("units")
+                assert "unit" in t_info, (
+                    f"Expected 'unit' key in STRDS metadata for '{strds_id}', "
+                    f"but found keys: {list(t_info.keys())}"
+                )
+                time_unit = t_info.get("unit")
+                assert time_unit == expected_unit, (
+                    f"Expected time unit '{expected_unit}' for relative STRDS '{strds_id}', "
+                    f"got '{time_unit}'"
+                )
+            elif time_dim_type == "absolute":
+                # Verify temporal type is absolute
+                assert t_info.get("temporal_type") == "absolute", (
+                    f"Expected temporal_type='absolute' for STRDS '{strds_id}', "
+                    f"got '{t_info.get('temporal_type')}'"
+                )
+
             # Check statistics for the first and last time slices
             indices_to_check = [0, num_times - 1] if num_times > 0 else []
             for idx_in_da_time in indices_to_check:
-                time_val = sample_da.start_time.values[idx_in_da_time]
-                da_slice = sample_da.sel(start_time=time_val).astype(
+                time_val = sample_da.time.values[idx_in_da_time]
+                da_slice = sample_da.sel(time=time_val).astype(
                     float
                 )  # Ensure float for comparison
 
@@ -390,6 +422,10 @@ class TestToGrassSuccess:
             f"DataArray dims {sample_da.dims} do not match expected {expected_dims_order_in_da}"
         )
 
+        # Set time unit attribute for relative time
+        if time_dim_type == "relative":
+            sample_da["time"].attrs["units"] = "days"
+
         target_mapset_name = temp_gisdb.mapset
         mapset_path_obj = (
             Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
@@ -414,6 +450,35 @@ class TestToGrassSuccess:
             assert len(str3ds_map_names_in_grass) == num_times, (
                 f"Expected {num_times} maps in STR3DS '{str3ds_id}', found {len(str3ds_maps_in_grass)}."
             )
+
+            # Check temporal metadata including time units for relative time
+            t_info = gs.parse_command(
+                "t.info", type="str3ds", input=str3ds_id, flags="g", quiet=True
+            )
+
+            if time_dim_type == "relative":
+                # Verify temporal type is relative
+                assert t_info.get("temporal_type") == "relative", (
+                    f"Expected temporal_type='relative' for STR3DS '{str3ds_id}', "
+                    f"got '{t_info.get('temporal_type')}'"
+                )
+                # Verify relative time unit is properly written to the GRASS database
+                expected_unit = sample_da["time"].attrs.get("units")
+                assert "unit" in t_info, (
+                    f"Expected 'unit' key in STR3DS metadata for '{str3ds_id}', "
+                    f"but found keys: {list(t_info.keys())}"
+                )
+                time_unit = t_info.get("unit")
+                assert time_unit == expected_unit, (
+                    f"Expected time unit '{expected_unit}' for relative STR3DS '{str3ds_id}', "
+                    f"got '{time_unit}'"
+                )
+            elif time_dim_type == "absolute":
+                # Verify temporal type is absolute
+                assert t_info.get("temporal_type") == "absolute", (
+                    f"Expected temporal_type='absolute' for STR3DS '{str3ds_id}', "
+                    f"got '{t_info.get('temporal_type')}'"
+                )
 
             # Check statistics for the first and last time slices
             indices_to_check = [0, num_times - 1] if num_times > 0 else []
@@ -845,11 +910,11 @@ class TestToGrassSuccess:
         assert da_3d.dims == ("x_3d", "z", "y_3d")
         assert da_3d.shape == (width_3d, depth_3d, height_3d)
 
-        # 3. Test STRDS: Create with start_time,y,x then transpose to x,y,start_time
+        # 3. Test STRDS: Create with start_time,y,x then transpose to x,y,time
         strds_name = "test_transpose_strds"
         da_strds = create_sample_dataarray(
             dims_spec={
-                "start_time": np.arange(1, num_times_strds + 1),
+                "time": np.arange(1, num_times_strds + 1),
                 "y": np.arange(height_strds, dtype=float),
                 "x": np.arange(width_strds, dtype=float),
             },
@@ -861,9 +926,9 @@ class TestToGrassSuccess:
             .reshape(s)
             .astype(float),
         )
-        # Transpose to non-standard order (x, y, start_time)
-        da_strds = da_strds.transpose("x", "y", "start_time")
-        assert da_strds.dims == ("x", "y", "start_time")
+        # Transpose to non-standard order (x, y, time)
+        da_strds = da_strds.transpose("x", "y", "time")
+        assert da_strds.dims == ("x", "y", "time")
         assert da_strds.shape == (width_strds, height_strds, num_times_strds)
 
         # 4. Test STR3DS: Create with time,z,y,x then transpose to y_3d,time,x_3d,z
@@ -912,7 +977,11 @@ class TestToGrassSuccess:
             to_grass(dataset=da_3d, mapset=mapset_arg)
 
             # Write STRDS
-            to_grass(dataset=da_strds, mapset=mapset_arg)
+            to_grass(
+                dataset=da_strds,
+                mapset=mapset_arg,
+                dims={strds_name: {"start_time": "time"}},
+            )
 
             # Write STR3DS
             to_grass(
