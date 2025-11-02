@@ -153,7 +153,7 @@ Attributes:
   - [ ] Support `end_time`
   - [ ] Accept writing into a specific mapset (GRASS 8.5)
   - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)
-- [ ] Lazy loading of all raster types
+- [x] Lazy loading of STDS on the time dimension
 - [ ] Properly test with lat-lon location
 
 ### Stretch goals

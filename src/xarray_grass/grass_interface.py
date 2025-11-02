@@ -28,7 +28,7 @@ import grass.script as gs
 from grass.script import array as garray
 import grass.pygrass.utils as gutils
 from grass.pygrass import raster as graster
-from grass.pygrass.raster.abstract import Info
+from grass.pygrass.raster.abstract import Info, RasterAbstractBase
 import grass.temporal as tgis
 
 from xarray_grass.coord_utils import (
@@ -230,11 +230,11 @@ class GrassInterface(object):
         return bool(tgis.SpaceTimeRaster3DDataset(str3ds_id).is_in_db())
 
     def name_is_raster(self, raster_name: str) -> bool:
-        """return True if the given name is a map in the grass database
-        False if not
-        """
+        """return True if the given name is a raster map in the grass database."""
+        # Using pygrass instead of gscript is at least 40x faster
         map_id = self.get_id_from_name(raster_name)
-        return bool(gs.find_file(name=map_id, element="raster").get("file"))
+        map_object = RasterAbstractBase(map_id)
+        return map_object.exist()
 
     def name_is_raster_3d(self, raster3d_name: str) -> bool:
         """return True if the given name is a 3D raster in the grass database."""
@@ -261,11 +261,11 @@ class GrassInterface(object):
     @staticmethod
     def numpy_dtype(mtype: str) -> np.dtype:
         if mtype == "CELL":
-            dtype = np.int64
+            dtype = np.dtype("int64")
         elif mtype == "FCELL":
-            dtype = np.float32
+            dtype = np.dtype("float32")
         elif mtype == "DCELL":
-            dtype = np.float64
+            dtype = np.dtype("float64")
         else:
             raise ValueError(f"Unknown GRASS data type: {mtype}")
         return dtype

@@ -24,7 +24,7 @@ import grass_session  # noqa: F401
 
 import xarray_grass
 from xarray_grass.grass_interface import GrassInterface
-from xarray_grass.grass_backend_array import GrassBackendArray
+from xarray_grass.grass_backend_array import GrassSTDSBackendArray
 
 
 class GrassBackendEntrypoint(BackendEntrypoint):
@@ -265,6 +265,8 @@ def open_grass_maps(
                 data_array_list.append(data_array)
         if raise_on_not_found and any(not_found.values()):
             raise ValueError(f"Objects not found: {not_found}")
+
+        crs_wkt = gi.get_crs_wkt_str()
     finally:
         if session is not None:
             session.__exit__(None, None, None)
@@ -277,7 +279,7 @@ def open_grass_maps(
     data_array_dict = {da.name: da for da in data_array_list}
 
     attrs = {
-        "crs_wkt": gi.get_crs_wkt_str(),
+        "crs_wkt": crs_wkt,
         "Conventions": "CF-1.13-draft",
         # "title": "",
         "history": f"{datetime.now(timezone.utc)}: Created with xarray-grass version {xarray_grass.__version__}",
@@ -347,9 +349,7 @@ def open_grass_raster_3d(raster_3d_name: str, grass_i: GrassInterface) -> xr.Dat
 
 
 def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
-    """must be called from within a grass session
-    TODO: lazy loading
-    """
+    """Open a STRDS with lazy loading - data is only loaded when accessed"""
     strds_id = grass_i.get_id_from_name(strds_name)
     strds_name = grass_i.get_name_from_id(strds_id)
     x_coords, y_coords, _ = get_coordinates(grass_i, raster_3d=False).values()
@@ -360,45 +360,46 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
         time_unit = strds_infos.time_unit
     start_time_dim = f"start_time_{strds_name}"
     end_time_dim = f"end_time_{strds_name}"
-    dims = [start_time_dim, "y", "x"]
-    coordinates = dict.fromkeys(dims)
-    coordinates["x"] = x_coords
-    coordinates["y"] = y_coords
+
     map_list = grass_i.list_maps_in_strds(strds_id)
     region = grass_i.get_region()
-    array_list = []
-    for map_data in map_list:
-        # Lazy load the array
-        backend_array = GrassBackendArray(
-            shape=(region.rows, region.cols),
-            dtype=map_data.dtype,
-            map_id=map_data.id,
-            map_type="raster",
-            grass_interface=grass_i,
-        )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
-        # add time dimension at the beginning
-        lazy_array_with_time = np.expand_dims(lazy_array, axis=0)
 
-        # ndarray = grass_i.read_raster_map(map_data.id)
-        # # add time dimension at the beginning
-        # ndarray = np.expand_dims(ndarray, axis=0)
+    # Create a single backend array for the entire STRDS
+    backend_array = GrassSTDSBackendArray(
+        shape=(len(map_list), region.rows, region.cols),
+        dtype=map_list[0].dtype,
+        map_list=map_list,
+        map_type="raster",
+        grass_interface=grass_i,
+    )
+    lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
 
-        coordinates[start_time_dim] = [map_data.start_time]
-        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
+    # Create Variable with lazy array
+    var = xr.Variable(dims=[start_time_dim, "y", "x"], data=lazy_array)
 
-        data_array = xr.DataArray(
-            lazy_array_with_time,
-            coords=coordinates,
-            dims=dims,
-            name=strds_name,
-        )
-        array_list.append(data_array)
-    da_concat = xr.concat(array_list, dim=start_time_dim)
+    # Extract time coordinates
+    start_times = [map_data.start_time for map_data in map_list]
+    end_times = [map_data.end_time for map_data in map_list]
+
+    # Create coordinates
+    coordinates = {
+        "x": x_coords,
+        "y": y_coords,
+        start_time_dim: start_times,
+        end_time_dim: (start_time_dim, end_times),
+    }
+
+    # Convert to DataArray
+    data_array = xr.DataArray(
+        var,
+        coords=coordinates,
+        name=strds_name,
+    )
+
     # Add CF attributes
     r_infos = grass_i.get_raster_info(map_list[0].id)
     da_with_attrs = set_cf_coordinates(
-        da_concat,
+        data_array,
         gi=grass_i,
         is_3d=False,
         time_dims=[start_time_dim, end_time_dim],
@@ -414,7 +415,7 @@ def open_grass_strds(strds_name: str, grass_i: GrassInterface) -> xr.DataArray:
 
 
 def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray:
-    """Open a series of 3D raster maps.
+    """Open a STR3DS with lazy loading - data is only loaded when accessed
     TODO: Figure out what to do when the z value of the maps is time."""
     str3ds_id = grass_i.get_id_from_name(str3ds_name)
     str3ds_name = grass_i.get_name_from_id(str3ds_id)
@@ -426,43 +427,47 @@ def open_grass_str3ds(str3ds_name: str, grass_i: GrassInterface) -> xr.DataArray
         time_unit = strds_infos.time_unit
     start_time_dim = f"start_time_{str3ds_name}"
     end_time_dim = f"end_time_{str3ds_name}"
-    dims = [start_time_dim, "z", "y_3d", "x_3d"]
-    coordinates = dict.fromkeys(dims)
-    coordinates["x_3d"] = x_coords
-    coordinates["y_3d"] = y_coords
-    coordinates["z"] = z_coords
+
     map_list = grass_i.list_maps_in_str3ds(str3ds_id)
     region = grass_i.get_region()
-    array_list = []
-    for map_data in map_list:
-        # Lazy load the map
-        backend_array = GrassBackendArray(
-            shape=(region.depths, region.rows3, region.cols3),
-            dtype=map_data.dtype,
-            map_id=map_data.id,
-            map_type="raster3d",
-            grass_interface=grass_i,
-        )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
-        # add time dimension at the beginning
-        lazy_array_with_time = np.expand_dims(lazy_array, axis=0)
 
-        coordinates[start_time_dim] = [map_data.start_time]
-        coordinates[end_time_dim] = (start_time_dim, [map_data.end_time])
+    # Create a single backend array for the entire STR3DS
+    backend_array = GrassSTDSBackendArray(
+        shape=(len(map_list), region.depths, region.rows3, region.cols3),
+        dtype=map_list[0].dtype,
+        map_list=map_list,
+        map_type="raster3d",
+        grass_interface=grass_i,
+    )
+    lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
 
-        data_array = xr.DataArray(
-            lazy_array_with_time,
-            coords=coordinates,
-            dims=dims,
-            name=str3ds_name,
-        )
-        array_list.append(data_array)
+    # Create Variable with lazy array
+    var = xr.Variable(dims=[start_time_dim, "z", "y_3d", "x_3d"], data=lazy_array)
 
-    da_concat = xr.concat(array_list, dim=start_time_dim)
+    # Extract time coordinates
+    start_times = [map_data.start_time for map_data in map_list]
+    end_times = [map_data.end_time for map_data in map_list]
+
+    # Create coordinates
+    coordinates = {
+        "x_3d": x_coords,
+        "y_3d": y_coords,
+        "z": z_coords,
+        start_time_dim: start_times,
+        end_time_dim: (start_time_dim, end_times),
+    }
+
+    # Convert to DataArray
+    data_array = xr.DataArray(
+        var,
+        coords=coordinates,
+        name=str3ds_name,
+    )
+
     # Add CF attributes
     r3_infos = grass_i.get_raster3d_info(map_list[0].id)
     da_with_attrs = set_cf_coordinates(
-        da_concat,
+        data_array,
         gi=grass_i,
         is_3d=True,
         z_unit=r3_infos["vertical_units"],
