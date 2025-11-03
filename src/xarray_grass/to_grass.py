@@ -250,7 +250,7 @@ class XarrayToGrass:
         # 1. Determine the temporal coordinate and type
         time_coord = data[dims["start_time"]]
         time_dtype = time_coord.dtype
-        time_unit = None  # Initialize for absolute time case
+        time_unit = ""  # Initialize for absolute time case
         if isinstance(time_dtype, np.dtypes.DateTime64DType):
             temporal_type = "absolute"
         elif np.issubdtype(time_dtype, np.integer):

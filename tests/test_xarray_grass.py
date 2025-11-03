@@ -272,6 +272,7 @@ class TestXarrayGrass:
             raster=ACTUAL_RASTER_MAP,
             raster_3d=ACTUAL_RASTER3D_MAP,
             strds=ACTUAL_STRDS,
+            str3ds=RELATIVE_STR3DS,
         )
 
         # Dataset-level attributes: only these should be present
@@ -338,8 +339,8 @@ class TestXarrayGrass:
             assert test_dataset[time_coord].attrs["standard_name"] == "time"
 
             # For relative time coordinates, units should be present
-            if time_coord.startswith("start_time_") or time_coord.startswith(
-                "end_time_"
+            if time_coord.endswith(RELATIVE_STR3DS) or time_coord.endswith(
+                RELATIVE_STR3DS
             ):
                 # This is a relative time coordinate, should have units
                 assert "units" in test_dataset[time_coord].attrs

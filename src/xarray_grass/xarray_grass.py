@@ -258,7 +258,8 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             for time_dim in time_dims:
                 da[time_dim].attrs["axis"] = "T"
                 da[time_dim].attrs["standard_name"] = "time"
-                da[time_dim].attrs["units"] = time_unit
+                if time_unit:  # NetCDF does not accept units for absolute time
+                    da[time_dim].attrs["units"] = time_unit
         da[x_coord].attrs["axis"] = "X"
         da[y_coord].attrs["axis"] = "Y"
         if self.grass_interface.is_latlon():
@@ -277,8 +278,8 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             else:
                 da[x_coord].attrs["standard_name"] = "projection_x_coordinate"
                 da[y_coord].attrs["standard_name"] = "projection_y_coordinate"
-                da[x_coord].attrs["units"] = spatial_unit
-                da[y_coord].attrs["units"] = spatial_unit
+                da[x_coord].attrs["units"] = str(spatial_unit)
+                da[y_coord].attrs["units"] = str(spatial_unit)
         return da
 
     def _open_grass_raster(self, raster_name: str) -> xr.DataArray:
@@ -304,8 +305,8 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         da_with_attrs.attrs["source"] = ",".join(
             [r_infos["source1"], r_infos["source2"]]
         )
-        da_with_attrs.attrs["units"] = r_infos.get("units", "")
-        da_with_attrs.attrs["comment"] = r_infos.get("comments", "")
+        da_with_attrs.attrs["units"] = str(r_infos.get("units", ""))
+        da_with_attrs.attrs["comment"] = str(r_infos.get("comments", ""))
         # CF attributes "institution" and "references"
         # Do not correspond to a direct GRASS value.
         return da_with_attrs
@@ -352,7 +353,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         ).values()
         strds_infos = self.grass_interface.get_stds_infos(strds_id, stds_type="strds")
         if strds_infos.temporal_type == "absolute":
-            time_unit = None
+            time_unit = ""
         else:
             time_unit = strds_infos.time_unit
         start_time_dim = f"start_time_{strds_name}"
@@ -421,7 +422,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         ).values()
         strds_infos = self.grass_interface.get_stds_infos(str3ds_id, stds_type="str3ds")
         if strds_infos.temporal_type == "absolute":
-            time_unit = None
+            time_unit = ""
         else:
             time_unit = strds_infos.time_unit
         start_time_dim = f"start_time_{str3ds_name}"
