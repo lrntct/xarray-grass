@@ -314,7 +314,9 @@ class GrassInterface(object):
 
     @staticmethod
     def get_raster_info(raster_id: str) -> Info:
-        return gs.parse_command("r.info", map=raster_id, flags="ge")
+        result = gs.parse_command("r.info", map=raster_id, flags="ge")
+        # Strip quotes from string values (r.info returns quoted strings)
+        return {k: v.strip('"') if isinstance(v, str) else v for k, v in result.items()}
 
     @staticmethod
     def get_raster3d_info(raster3d_id):
