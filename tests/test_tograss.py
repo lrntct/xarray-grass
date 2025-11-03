@@ -68,10 +68,7 @@ class TestToGrassSuccess:
         )
 
         target_mapset_name = temp_gisdb.mapset  # Use PERMANENT mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
+
         grass_raster_name_full = (
             f"{sample_da.name}@{target_mapset_name}"  # Moved and defined
         )
@@ -79,8 +76,6 @@ class TestToGrassSuccess:
         try:
             to_grass(
                 dataset=sample_da,
-                mapset=mapset_arg,
-                create=False,
             )
             available_rasters = grass_i.list_raster(mapset=target_mapset_name)
             assert grass_raster_name_full in available_rasters, (
@@ -175,17 +170,11 @@ class TestToGrassSuccess:
         )
 
         target_mapset_name = temp_gisdb.mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
 
         # Try statement for file cleanup
         try:
             to_grass(
                 dataset=sample_da,
-                mapset=mapset_arg,
-                create=False,
             )
             grass_raster_name_full = f"{sample_da.name}@{target_mapset_name}"
             available_rasters_3d = grass_i.list_raster3d(mapset=target_mapset_name)
@@ -281,15 +270,9 @@ class TestToGrassSuccess:
             sample_da["time"].attrs["units"] = "days"
 
         target_mapset_name = temp_gisdb.mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
 
         to_grass(
             dataset=sample_da,
-            mapset=mapset_arg,
-            create=False,
             dims={"test_strds": {"start_time": "time"}},
         )
         strds_id = f"{sample_da.name}@{target_mapset_name}"
@@ -426,16 +409,8 @@ class TestToGrassSuccess:
         if time_dim_type == "relative":
             sample_da["time"].attrs["units"] = "days"
 
-        target_mapset_name = temp_gisdb.mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
-
         to_grass(
             dataset=sample_da,
-            mapset=mapset_arg,
-            create=False,
             dims={"test_str3ds_vol": {"start_time": "time"}},
         )
         try:
@@ -526,11 +501,6 @@ class TestToGrassSuccess:
     ):
         """Test conversion of an xr.Dataset with mixed DataArray types."""
         session_crs_wkt = grass_i.get_crs_wkt_str()
-        target_mapset_name = temp_gisdb.mapset  # Use PERMANENT mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = mapset_path_obj if mapset_is_path_obj else str(mapset_path_obj)
 
         # 2D Raster Spec
         da_2d_spec = {
@@ -592,8 +562,6 @@ class TestToGrassSuccess:
 
         to_grass(
             dataset=sample_ds,
-            mapset=mapset_arg,
-            create=False,
             dims={
                 "strds_var": {"start_time": "time"},
                 "str3ds_var": {"start_time": "time"},
@@ -713,7 +681,7 @@ class TestToGrassSuccess:
             name="data_for_mapset_creation",
         )
 
-        to_grass(dataset=sample_da, mapset=str(mapset_path), create=True)
+        to_grass(dataset=sample_da)
 
         assert mapset_path.exists() and mapset_path.is_dir(), (
             f"Mapset directory {mapset_path} was not created."
@@ -788,7 +756,7 @@ class TestToGrassSuccess:
             name="data_for_existing_mapset",
         )
 
-        to_grass(dataset=sample_da, mapset=str(mapset_path), create=False)
+        to_grass(dataset=sample_da)
 
         available_rasters = grass_i.list_raster(mapset=existing_mapset_name)
         assert sample_da.name in available_rasters, (
@@ -812,7 +780,6 @@ class TestToGrassSuccess:
         """Test 'dims' mapping functionality."""
         session_crs_wkt = grass_i.get_crs_wkt_str()
         target_mapset_name = temp_gisdb.mapset
-        mapset_path = Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
         da_name = "dims_test_raster"
         img_height, img_width = 3, 2
 
@@ -832,8 +799,6 @@ class TestToGrassSuccess:
             sample_da = sample_da.rename(rename_map[da_name])
         to_grass(
             dataset=sample_da,
-            mapset=str(mapset_path),
-            create=False,
             dims=rename_map,
         )
         available_rasters = grass_i.list_raster(mapset=target_mapset_name)
@@ -856,11 +821,6 @@ class TestToGrassSuccess:
         and verifies they are correctly transposed when written to GRASS.
         """
         session_crs_wkt = grass_i.get_crs_wkt_str()
-        target_mapset_name = temp_gisdb.mapset
-        mapset_path_obj = (
-            Path(temp_gisdb.gisdb) / temp_gisdb.project / target_mapset_name
-        )
-        mapset_arg = str(mapset_path_obj)
 
         # Define expected dimensions for verification
         height_2d, width_2d = 5, 7
@@ -971,22 +931,20 @@ class TestToGrassSuccess:
 
         try:
             # Write 2D raster
-            to_grass(dataset=da_2d, mapset=mapset_arg)
+            to_grass(dataset=da_2d)
 
             # Write 3D raster
-            to_grass(dataset=da_3d, mapset=mapset_arg)
+            to_grass(dataset=da_3d)
 
             # Write STRDS
             to_grass(
                 dataset=da_strds,
-                mapset=mapset_arg,
                 dims={strds_name: {"start_time": "time"}},
             )
 
             # Write STR3DS
             to_grass(
                 dataset=da_str3ds,
-                mapset=mapset_arg,
                 dims={str3ds_name: {"start_time": "time"}},
             )
 

@@ -25,7 +25,6 @@ import pandas as pd
 
 
 # Needed to import grass modules
-import grass_session  # noqa: F401
 import grass.script as gs
 from grass.script import array as garray
 import grass.pygrass.utils as gutils
@@ -98,6 +97,10 @@ class GrassInterface(object):
         if "GISRC" not in os.environ:
             raise RuntimeError("GRASS session not set.")
         self.overwrite = overwrite
+        if self.overwrite:
+            os.environ["GRASS_OVERWRITE"] = "1"
+        else:
+            os.environ["GRASS_OVERWRITE"] = "0"
         tgis.init()
 
     @staticmethod
@@ -505,3 +508,33 @@ class GrassInterface(object):
             unit=t_unit,
         )
         return self
+
+    def get_coordinates(self, raster_3d: bool) -> dict[str : np.ndarray]:
+        """return np.ndarray of coordinates from the GRASS region."""
+        current_region = self.get_region()
+        lim_e = current_region.e
+        lim_w = current_region.w
+        lim_n = current_region.n
+        lim_s = current_region.s
+        lim_t = current_region.t
+        lim_b = current_region.b
+        dz = current_region.tbres
+        if raster_3d:
+            dx = current_region.ewres3
+            dy = current_region.nsres3
+        else:
+            dx = current_region.ewres
+            dy = current_region.nsres
+        # GRASS limits are at the edge of the region.
+        # In the exported arrays, coordinates are at the center of the cell
+        # Stop not changed to include it in the range
+        start_w = lim_w + dx / 2
+        stop_e = lim_e
+        start_s = lim_s + dy / 2
+        stop_n = lim_n
+        start_b = lim_b + dz / 2
+        stop_t = lim_t
+        x_coords = np.arange(start=start_w, stop=stop_e, step=dx, dtype=np.float32)
+        y_coords = np.arange(start=start_s, stop=stop_n, step=dy, dtype=np.float32)
+        z_coords = np.arange(start=start_b, stop=stop_t, step=dz, dtype=np.float32)
+        return {"x": x_coords, "y": y_coords, "z": z_coords}

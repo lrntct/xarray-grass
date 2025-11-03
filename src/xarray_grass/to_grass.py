@@ -13,35 +13,30 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
+from __future__ import annotations
 import os
-from pathlib import Path
-from typing import Mapping, Optional
+from typing import TYPE_CHECKING, Mapping, Optional
 
 from pyproj import CRS
 import xarray as xr
 import numpy as np
 import pandas as pd
-import grass_session  # noqa: F401
 
-from xarray_grass.grass_interface import GrassInterface
-from xarray_grass.xarray_grass import dir_is_grass_mapset, dir_is_grass_project
 from xarray_grass.coord_utils import get_region_from_xarray
+
+if TYPE_CHECKING:
+    from xarray_grass.grass_interface import GrassInterface
 
 
 def to_grass(
     dataset: xr.Dataset | xr.DataArray,
-    mapset: str | Path,
     dims: Optional[Mapping[str, Mapping[str, str]]] = None,
     overwrite: bool = False,
-    create: bool = False,
 ) -> None:
     """Convert an xarray.Dataset or xarray.DataArray to GRASS GIS maps.
 
-    This function handles the setup of the GRASS environment and session
-    management. It can create a new mapset if specified and not already
-    existing. It then calls the appropriate internal functions to perform
-    the conversion of the xarray object's data variables into GRASS raster,
-    raster 3D, STRDS, or STR3DS object.
+    Perform the conversion of the xarray object's data variables into GRASS
+    raster, raster 3D, STRDS, or STR3DS object.
 
 
     Parameters
@@ -49,8 +44,6 @@ def to_grass(
     dataset : xr.Dataset | xr.DataArray
         The xarray object to convert. If a Dataset, each data variable
         will be converted.
-    mapset : str | Path
-        Path to the target GRASS mapset.
     dims : Mapping[str, Mapping[str, str]], optional
         A mapping from standard dimension names
         ('start_time', 'end_time', 'x', 'y', 'x_3d', 'y_3d', 'z',)
@@ -66,109 +59,32 @@ def to_grass(
     Returns
     -------
     None
-
-    Raises
-    ------
-    ValueError
-        If the provided `mapset` path is invalid, not a GRASS mapset,
-        or if its parent directory is not a valid GRASS project when
-        `create` is False or the mapset doesn't exist.
-        If the target mapset is not accessible from an existing GRASS session.
     """
-    mapset_path = Path(mapset)
-    mapset = mapset_path.stem
-    project_name = mapset_path.parent.stem
-    project_path = mapset_path.parent
-    gisdb = project_path.parent
+    if "GISRC" not in os.environ:
+        raise RuntimeError(
+            "GRASS session not detected. "
+            "Please setup a GRASS session before trying to access GRASS data."
+        )
 
-    if not isinstance(dataset, xr.Dataset | xr.DataArray):
+    from xarray_grass.grass_interface import GrassInterface
+
+    if isinstance(dataset, xr.Dataset):
+        input_var_names = [var_name for var_name, _ in dataset.data_vars.items()]
+    elif isinstance(dataset, xr.DataArray):
+        input_var_names = [dataset.name]
+    else:
         raise TypeError(
             f"'dataset must be either an Xarray DataArray or Dataset, not {type(dataset)}"
         )
-
-    if create:
-        # Not until GRASS 8.5
-        raise NotImplementedError("'create' not yet available.")
-
-    if mapset_path.is_file():
-        raise ValueError(f"Mapset path '{mapset_path}' is a file, not a directory.")
-
-    # Prioritize check for create=False with a non-existent mapset
-    if not mapset_path.is_dir() and not create:
-        raise ValueError(
-            f"Mapset path '{mapset_path}' is not a valid directory and create is False."
-        )
-
-    if mapset_path.is_dir() and not dir_is_grass_mapset(mapset_path):
-        raise ValueError(
-            f"Path '{mapset_path}' exists but is not a valid GRASS mapset."
-        )
-
-    if not mapset_path.is_dir() and create and not dir_is_grass_project(project_path):
-        raise ValueError(
-            f"Mapset '{mapset_path}' not found and its parent directory "
-            f"'{project_path}' is not a valid GRASS project."
-        )
-
-    if not mapset_path.is_dir() and dir_is_grass_project(project_path) and create:
-        # gs.run_command(
-        #     "g.mapset", mapset=mapset_path.name, project=project_name, flags="c"
-        # )
-        # Skip until grass 8.5
-        pass
-
-    try:
-        input_var_names = [var_name for var_name, _ in dataset.data_vars.items()]
-    except AttributeError:  # a dataarray
-        input_var_names = [dataset.name]
 
     # set dimensions Mapping
     dim_formatter = DimensionsFormatter(input_var_names, dims)
     dim_dataset = dim_formatter.get_formatted_dims()
 
-    # Check if we're already in a GRASS session
-    session = None
-    if "GISRC" not in os.environ:
-        # No existing session, create a new one
-        session = grass_session.Session(
-            gisdb=str(gisdb), location=str(project_name), mapset=str(mapset)
-        )
-        session.__enter__()
-        gi = GrassInterface(overwrite)
-
-    else:
-        # We're in an existing session, check if it matches the requested path
-        gi = GrassInterface(overwrite)
-        check_grass_session(gi, mapset_path)
-
-    try:
-        xarray_to_grass = XarrayToGrass(dataset, gi, dim_dataset)
-        xarray_to_grass.to_grass()
-    finally:
-        if session is not None:
-            session.__exit__(None, None, None)
-
-
-def check_grass_session(grass_interface, mapset_path):
-    mapset = mapset_path.stem
-    project_name = mapset_path.parent.stem
-    project_path = mapset_path.parent
-    gisdb = project_path.parent
-
-    gisenv = grass_interface.get_gisenv()
-    current_gisdb = gisenv["GISDBASE"]
-    current_location = gisenv["LOCATION_NAME"]
-    accessible_mapsets = grass_interface.get_accessible_mapsets()
-
-    requested_path = Path(gisdb) / Path(project_name)
-    current_path = Path(current_gisdb) / Path(current_location)
-
-    if requested_path != current_path or str(mapset) not in accessible_mapsets:
-        raise ValueError(
-            f"Cannot access {mapset_path} "
-            f"from current GRASS session in project {current_path}. "
-            f"Accessible mapsets: {accessible_mapsets}."
-        )
+    # Write to grass
+    gi = GrassInterface(overwrite)
+    xarray_to_grass = XarrayToGrass(dataset, gi, dim_dataset)
+    xarray_to_grass.to_grass()
 
 
 class DimensionsFormatter:
@@ -366,6 +282,26 @@ class XarrayToGrass:
             is_3d = True
             stds_type = "str3ds"
             arr_type = "raster3d"
+
+        # Check if exists
+        if "strds" == stds_type:
+            if (
+                not self.grass_interface.overwrite
+                and self.grass_interface.name_is_strds(data.name)
+            ):
+                raise RuntimeError(
+                    f"STRDS {data.name} already exists and will not be overwritten."
+                )
+        elif "str3ds" == stds_type:
+            if (
+                not self.grass_interface.overwrite
+                and self.grass_interface.name_is_str3ds(data.name)
+            ):
+                raise RuntimeError(
+                    f"STR3DS {data.name} already exists and will not be overwritten."
+                )
+        else:
+            raise ValueError(f"Unknown STDS type '{stds_type}'.")
 
         # 3. Loop through the time dim:
         map_list = []

@@ -493,7 +493,6 @@ wheels = [
 name = "xarray-grass"
 source = { editable = "." }
 dependencies = [
-    { name = "grass-session" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyproj" },
@@ -502,6 +501,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "grass-session" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-random-order" },
@@ -511,7 +511,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "grass-session", specifier = ">=0.5" },
     { name = "numpy", specifier = ">=2.2.5" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pyproj", specifier = ">=3.7.1" },
@@ -520,6 +519,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "grass-session", specifier = ">=0.5" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-random-order", specifier = ">=1.1.1" },
