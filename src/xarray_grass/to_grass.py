@@ -283,6 +283,26 @@ class XarrayToGrass:
             stds_type = "str3ds"
             arr_type = "raster3d"
 
+        # Check if exists
+        if "strds" == stds_type:
+            if (
+                not self.grass_interface.overwrite
+                and self.grass_interface.name_is_strds(data.name)
+            ):
+                raise RuntimeError(
+                    f"STRDS {data.name} already exists and will not be overwritten."
+                )
+        elif "str3ds" == stds_type:
+            if (
+                not self.grass_interface.overwrite
+                and self.grass_interface.name_is_str3ds(data.name)
+            ):
+                raise RuntimeError(
+                    f"STR3DS {data.name} already exists and will not be overwritten."
+                )
+        else:
+            raise ValueError(f"Unknown STDS type '{stds_type}'.")
+
         # 3. Loop through the time dim:
         map_list = []
         for index, time in enumerate(time_coord):

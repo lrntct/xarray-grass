@@ -97,6 +97,10 @@ class GrassInterface(object):
         if "GISRC" not in os.environ:
             raise RuntimeError("GRASS session not set.")
         self.overwrite = overwrite
+        if self.overwrite:
+            os.environ["GRASS_OVERWRITE"] = "1"
+        else:
+            os.environ["GRASS_OVERWRITE"] = "0"
         tgis.init()
 
     @staticmethod
