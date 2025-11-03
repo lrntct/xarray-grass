@@ -6,6 +6,7 @@
 
 A [GRASS](https://grass.osgeo.org/) backend for [Xarray](https://xarray.dev/).
 Explore all your GRASS rasters with Xarray.
+Import zarr or NetCDF into your GRASS database.
 
 ## Installation
 
@@ -18,29 +19,56 @@ You need to install GRASS independently.
 ## Loading GRASS data as an Xarray Dataset
 
 ```python
->>> import xarray as xr
->>> test_ds = xr.open_dataset("/home/lc/grassdata/nc_spm_08_grass7/PERMANENT/", raster=["boundary_county_500m", "elevation"])
->>> test_ds
-<xarray.Dataset> Size: 253kB
-Dimensions:               (y: 150, x: 140)
+import xarray as xr
+import grass_session
+
+import grass.script as gscript
+
+
+with grass_session.Session(
+    gisdb="/home/laurent/data/grassdata/",
+    location="nc_spm_08_grass7_test",
+    mapset="PERMANENT",
+):
+    # Make modis_lst mapset accessible
+    gscript.run_command("g.mapsets", mapset="modis_lst", operation="add")
+    test_ds = xr.open_dataset(
+        "",  # No need to pass a path, the information is taken from the active grass session
+        engine="xarray_grass",  # If no path is given, then the engine must be specified
+        raster=["boundary_county_500m", "elevation"],
+        strds="LST_Day_monthly@modis_lst",
+    )
+
+    print(test_ds)
+```
+
+```
+Search path not modified
+<xarray.Dataset> Size: 6MB
+Dimensions:                     (y: 165, x: 179, start_time_LST_Day_monthly: 24)
 Coordinates:
-  * y                     (y) float32 600B 2.2e+05 2.2e+05 ... 2.207e+05
-  * x                     (x) float32 560B 6.383e+05 6.383e+05 ... 6.39e+05
+  * y                           (y) float32 660B 2.196e+05 ... 2.212e+05
+  * x                           (x) float32 716B 6.377e+05 ... 6.395e+05
+  * start_time_LST_Day_monthly  (start_time_LST_Day_monthly) datetime64[ns] 192B ...
+    end_time_LST_Day_monthly    (start_time_LST_Day_monthly) datetime64[ns] 192B ...
 Data variables:
-    boundary_county_500m  (y, x) float64 168kB ...
-    elevation             (y, x) float32 84kB ...
+    boundary_county_500m        (y, x) float64 236kB ...
+    elevation                   (y, x) float32 118kB ...
+    LST_Day_monthly             (start_time_LST_Day_monthly, y, x) int64 6MB ...
 Attributes:
     crs_wkt:      PROJCRS["NAD83(HARN) / North Carolina",BASEGEOGCRS["NAD83(H...
     Conventions:  CF-1.13-draft
-    history:      2025-10-31 18:22:16.644873+00:00: Created with xarray-grass...
-    source:       GRASS database. project: <nc_spm_08_grass7>, mapset:<PERMAN...
-
+    history:      2025-11-02 23:51:57.141257+00:00: Created with xarray-grass...
+    source:       GRASS database. project: , mapset:
 ```
+
+xarray-grass requires an active GRASS session to work.
+Here we're using the [grass-session](https://github.com/zarch/grass-session) package to set it.
 
 You can choose which maps you want to load with the `raster`, `raster_3d`, `strds` and `str3ds` parameters to `open_dataset`.
 Those accept either a single string or an iterable.
 If none of those are specified, the whole mapset will be loaded, ignoring single maps that are already registered in either a `strds` or `str3ds`;
-those maps will be loaded into the Xarray Dataset for being part of the GRASS Space Time Dataset.
+those maps will be loaded into the Xarray Dataset as part of the GRASS Space Time Dataset.
 Any time-stamp associated to a single map not registered in a stds is ignored.
 
 The extent and resolution of the resulting `Dataset` is defined by the region setting of GRASS, set with the `g.region` GRASS tool.
@@ -48,14 +76,8 @@ Note that in GRASS the 3D resolution is independent from the 2D resolution.
 Therefore, 2D and 3D maps loaded in Xarray will not share the same dimensions and coordinates.
 The coordinates in the Xarray `Dataset` correspond to the center of the GRASS cell.
 
-If run from outside a GRASS session, `xarray-grass` will automatically create a session in the requested project and mapset.
-If run from within GRASS, only maps from accessible mapsets could be loaded.
-You can list the accessible mapsets with `g.mapsets` from GRASS.
-
 In GRASS, the time dimension of various STDSs is not homogeneous, as it is for the spatial coordinates.
-To reflect this, xarray-grass will create one time dimension for each STDS loaded.
-
-From within a grass session, it is possible to access various mapsets.
+To account for this, xarray-grass will create one time dimension for each STDS loaded.
 
 ## CF conventions attributes mapping
 
@@ -80,35 +102,29 @@ The attributes set at the dataset level are:
 
 ## Writing an Xarray Dataset or DataArray to GRASS
 
+Continuing the script fro above, we can now write back the STRDS to GRASS.
+
+There are two requirements of note to write to GRASS using xarray-grass:
+  - The Dataset or SataArray needs a `crs_wkt` attribute with the CRS information in the WKT format.
+  - The `dims` parameter needs to map every dimensions which is non standard to its standard name.
+  The standard names are [x, y, z and start_time]
 
 ```python
-import xarray as xr
-from xarray_grass import to_grass
+    from xarray_grass import to_grass
 
-mapset = "/home/lc/grassdata/nc_spm_08_grass7/PERMANENT/"  # Or pathlib.Path
+    # Let's write the modis time series back into the current (PERMANENT) mapset
 
-test_ds = xr.open_dataset(
-    mapset,
-    raster=["boundary_county_500m", "elevation"],
-    strds="LST_Day_monthly@modis_lst",
-)
+    da_modis = test_ds["LST_Day_monthly"]
+    # xarray-grass needs the CRS information to write to GRASS
+    da_modis.attrs["crs_wkt"] = test_ds.attrs["crs_wkt"]
 
-print(test_ds)
-
-# Let's write the modis time series back into the PERMANENT mapset
-
-da_modis = test_ds["LST_Day_monthly"]
-# xarray-grass needs the CRS information to write to GRASS
-da_modis.attrs["crs_wkt"] = test_ds.attrs["crs_wkt"]
-
-to_grass(
-    dataset=da_modis,
-    mapset=mapset,
-    dims={
-        "LST_Day_monthly": {"start_time": "start_time_LST_Day_monthly"},
-    },
-    overwrite=False
-)
+    to_grass(
+        dataset=da_modis,
+        dims={
+            "LST_Day_monthly": {"start_time": "start_time_LST_Day_monthly"},
+        },
+        overwrite=False,
+    )
 ```
 
 The above `print` statement should return this:
@@ -151,12 +167,11 @@ Attributes:
   - [x] Transpose if dimensions are not in the expected order
   - [x] Support time units for relative time
   - [ ] Support `end_time`
-  - [ ] Accept writing into a specific mapset (GRASS 8.5)
   - [ ] Accept non homogeneous 3D resolution in NS and EW dimensions (GRASS 8.5)
 - [x] Lazy loading of STDS on the time dimension
 - [ ] Properly test with lat-lon location
 
 ### Stretch goals
 
-- [ ] Load all mapsets from a GRASS project (ex location)
 - [ ] Read CRS definitions from CF compatible fields
+- [ ] Lazy load on the spatial dimension
