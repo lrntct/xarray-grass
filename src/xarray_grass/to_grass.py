@@ -309,6 +309,14 @@ class XarrayToGrass:
             darray = data.sel({dims["start_time"]: time})
             darray = self.transpose(darray, dims, arr_type=arr_type)
             nd_array = darray.values
+
+            # Check for and sanitize infinity values before writing
+            # SQLite cannot handle 'inf' literal in GRASS temporal database
+            if np.isinf(nd_array).any():
+                # Replace infinity with NaN (create copy to avoid modifying original)
+                nd_array = nd_array.copy()
+                nd_array[np.isinf(nd_array)] = np.nan
+
             # 3.1 Write each map individually
             raster_name = f"{data.name}_{temporal_type}_{index}"
             if not is_3d:

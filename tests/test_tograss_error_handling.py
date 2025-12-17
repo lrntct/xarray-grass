@@ -158,3 +158,71 @@ class TestToGrassInputValidation:
                 dataset=sample_da,
                 dims={"invalid_var_name": {"x": "my_x"}},
             )
+
+    def test_strds_with_infinity_values(self, temp_gisdb, grass_i: GrassInterface):
+        """Test that STRDS with infinity values are sanitized (converted to NaN)."""
+        import grass.script as gs
+
+        session_crs_wkt = grass_i.get_crs_wkt_str()
+
+        # Create a STRDS with infinity values (similar to Froude number data)
+        img_width = 10
+        img_height = 12
+        num_times = 3
+
+        # Create data with infinity values
+        data_with_inf = np.random.rand(num_times, img_height, img_width).astype(float)
+        # Add some infinity values to simulate Froude number where depth -> 0
+        data_with_inf[1, 5:8, 3:6] = np.inf  # Positive infinity
+        data_with_inf[2, 2:4, 7:9] = np.inf  # More infinity
+
+        sample_da = create_sample_dataarray(
+            dims_spec={
+                "time": np.arange(num_times),
+                "y": np.arange(img_height, dtype=float),
+                "x": np.arange(img_width, dtype=float),
+            },
+            shape=(num_times, img_height, img_width),
+            crs_wkt=session_crs_wkt,
+            name="test_strds_inf",
+            time_dim_type="relative",
+            fill_value_generator=lambda s: data_with_inf,
+        )
+
+        # Override the time unit to "seconds" (helper sets it to "minutes" by default)
+        sample_da["time"].attrs["units"] = "seconds"
+
+        strds_id = grass_i.get_id_from_name(sample_da.name)
+
+        try:
+            # This should now succeed (infinity values replaced with NaN)
+            to_grass(
+                dataset=sample_da,
+                dims={"test_strds_inf": {"start_time": "time"}},
+            )
+
+            # Verify the STRDS was created successfully
+            available_strds = grass_i.list_strds()
+            assert strds_id in available_strds, (
+                f"STRDS '{strds_id}' not found in available STRDS: {available_strds}"
+            )
+
+            # Verify maps were registered
+            strds_maps = grass_i.list_maps_in_strds(strds_id)
+            assert len(strds_maps) == num_times, (
+                f"Expected {num_times} maps in STRDS, but found {len(strds_maps)}"
+            )
+
+        finally:
+            # Clean up
+            try:
+                gs.run_command(
+                    "t.remove",
+                    inputs=strds_id,
+                    type="strds",
+                    flags="rfd",
+                    quiet=True,
+                    errors="ignore",
+                )
+            except Exception:
+                pass  # Ignore cleanup errors
