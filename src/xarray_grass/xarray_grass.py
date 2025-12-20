@@ -12,17 +12,23 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
+from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Any, TYPE_CHECKING
 
 from xarray.backends import BackendEntrypoint
 import xarray as xr
+from xarray.core.indexing import LazilyIndexedArray
 
 import xarray_grass
 from xarray_grass.grass_interface import GrassInterface
 from xarray_grass.grass_backend_array import GrassSTDSBackendArray
+
+if TYPE_CHECKING:
+    from xarray.core.types import ReadBuffer
+    from xarray.backends.common import AbstractDataStore
 
 
 class GrassBackendEntrypoint(BackendEntrypoint):
@@ -42,13 +48,12 @@ class GrassBackendEntrypoint(BackendEntrypoint):
 
     def open_dataset(
         self,
-        filename_or_obj,
-        *,
-        raster: Optional[str | Iterable[str]] = None,
-        raster_3d: Optional[str | Iterable[str]] = None,
-        strds: Optional[str | Iterable[str]] = None,
-        str3ds: Optional[str | Iterable[str]] = None,
-        drop_variables: Iterable[str],
+        filename_or_obj: str | os.PathLike[Any] | ReadBuffer | AbstractDataStore,
+        raster: str | Iterable[str] | None = None,
+        raster_3d: str | Iterable[str] | None = None,
+        strds: str | Iterable[str] | None = None,
+        str3ds: str | Iterable[str] | None = None,
+        drop_variables: str | Iterable[str] | None = None,
     ) -> xr.Dataset:
         """Open GRASS project or mapset as an xarray.Dataset.
         Requires an active GRASS session.
@@ -68,7 +73,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
 
         self.grass_interface = GrassInterface()
 
-        open_func_params = dict(
+        open_func_params: dict[str, Iterable[str] | None] = dict(
             raster_list=raster,
             raster_3d_list=raster_3d,
             strds_list=strds,
@@ -159,10 +164,10 @@ class GrassBackendEntrypoint(BackendEntrypoint):
     def _open_grass_maps(
         self,
         filename_or_obj: str | Path,
-        raster_list: Iterable[str] = None,
-        raster_3d_list: Iterable[str] = None,
-        strds_list: Iterable[str] = None,
-        str3ds_list: Iterable[str] = None,
+        raster_list: Iterable[str] | None = None,
+        raster_3d_list: Iterable[str] | None = None,
+        strds_list: Iterable[str] | None = None,
+        str3ds_list: Iterable[str] | None = None,
     ) -> xr.Dataset:
         """
         Open a GRASS mapset and return an xarray dataset.
@@ -240,7 +245,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         da: xr.DataArray,
         is_3d: bool,
         z_unit: str = "",
-        time_dims: Optional[list[str, str]] = None,
+        time_dims: tuple[str, str] | None = None,
         time_unit: str = "",
     ):
         """Set coordinate attributes according to CF conventions"""
@@ -370,7 +375,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             map_type="raster",
             grass_interface=self.grass_interface,
         )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        lazy_array = LazilyIndexedArray(backend_array)
 
         # Create Variable with lazy array
         var = xr.Variable(dims=[start_time_dim, "y", "x"], data=lazy_array)
@@ -399,7 +404,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         da_with_attrs = self._set_cf_coordinates_attributes(
             data_array,
             is_3d=False,
-            time_dims=[start_time_dim, end_time_dim],
+            time_dims=(start_time_dim, end_time_dim),
             time_unit=time_unit,
         )
         da_with_attrs.attrs["long_name"] = strds_infos.title
@@ -439,7 +444,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             map_type="raster3d",
             grass_interface=self.grass_interface,
         )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        lazy_array = LazilyIndexedArray(backend_array)
 
         # Create Variable with lazy array
         var = xr.Variable(dims=[start_time_dim, "z", "y_3d", "x_3d"], data=lazy_array)
@@ -470,7 +475,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             data_array,
             is_3d=True,
             z_unit=r3_infos["vertical_units"],
-            time_dims=[start_time_dim, end_time_dim],
+            time_dims=(start_time_dim, end_time_dim),
             time_unit=time_unit,
         )
         da_with_attrs.attrs["long_name"] = strds_infos.title

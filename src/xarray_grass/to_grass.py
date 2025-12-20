@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 from __future__ import annotations
 import os
-from typing import TYPE_CHECKING, Mapping, Optional
+from typing import TYPE_CHECKING, Mapping
 
 from pyproj import CRS
 import xarray as xr
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def to_grass(
     dataset: xr.Dataset | xr.DataArray,
-    dims: Optional[Mapping[str, Mapping[str, str]]] = None,
+    dims: Mapping[str, Mapping[str, str]] | None = None,
     overwrite: bool = False,
 ) -> None:
     """Convert an xarray.Dataset or xarray.DataArray to GRASS GIS maps.
@@ -69,9 +69,11 @@ def to_grass(
     from xarray_grass.grass_interface import GrassInterface
 
     if isinstance(dataset, xr.Dataset):
-        input_var_names = [var_name for var_name, _ in dataset.data_vars.items()]
+        input_var_names: list[str] = [
+            str(var_name) for var_name, _ in dataset.data_vars.items()
+        ]
     elif isinstance(dataset, xr.DataArray):
-        input_var_names = [dataset.name]
+        input_var_names: list[str] = [str(dataset.name)]
     else:
         raise TypeError(
             f"'dataset must be either an Xarray DataArray or Dataset, not {type(dataset)}"
@@ -91,7 +93,7 @@ class DimensionsFormatter:
     """Populate the dimension mapping based on default values and user-provided ones"""
 
     # Default dimension names
-    default_dims = {
+    default_dims: dict[str, str] = {
         "start_time": "start_time",
         "end_time": "end_time",
         "x": "x",
@@ -104,7 +106,7 @@ class DimensionsFormatter:
     def __init__(self, input_var_names, input_dims):
         self.input_var_names = input_var_names
         self.input_dims = input_dims
-        self._dataset_dims = {}
+        self._dataset_dims: dict[str, dict[str, str]] = {}
 
         # Instantiate the dimensions with default values
         for var_name in input_var_names:
@@ -138,7 +140,7 @@ class DimensionsFormatter:
             for dim_key, dim_value in dims.items():
                 self._dataset_dims[var_name][dim_key] = dim_value
 
-    def get_formatted_dims(self):
+    def get_formatted_dims(self) -> dict[str, dict[str, str]]:
         if self.input_dims is not None:
             self.fill_dims()
         return self._dataset_dims
@@ -149,7 +151,7 @@ class XarrayToGrass:
         self,
         dataset: xr.Dataset | xr.DataArray,
         grass_interface: GrassInterface,
-        dims: Mapping[str, str] = None,
+        dims: Mapping[str, Mapping[str, str]],
     ):
         self.dataset = dataset
         self.grass_interface = grass_interface
@@ -170,9 +172,13 @@ class XarrayToGrass:
             )
         try:
             for var_name, data in self.dataset.data_vars.items():
-                self._datarray_to_grass(data, self.dataset_dims[var_name])
+                self._datarray_to_grass(data, self.dataset_dims[str(var_name)])
         except AttributeError:  # DataArray
-            self._datarray_to_grass(self.dataset, self.dataset_dims[self.dataset.name])
+            if not isinstance(self.dataset, xr.DataArray):
+                raise TypeError("Expected DataArray")
+            self._datarray_to_grass(
+                self.dataset, self.dataset_dims[str(self.dataset.name)]
+            )
 
     def _datarray_to_grass(
         self,
@@ -216,12 +222,12 @@ class XarrayToGrass:
         try:
             if is_raster:
                 data = self.transpose(data, dims, arr_type="raster")
-                self.grass_interface.write_raster_map(data, data.name)
+                self.grass_interface.write_raster_map(data.values, str(data.name))
             elif is_strds:
                 self._write_stds(data, dims)
             elif is_raster_3d:
                 data = self.transpose(data, dims, arr_type="raster3d")
-                self.grass_interface.write_raster3d_map(data, data.name)
+                self.grass_interface.write_raster3d_map(data.values, str(data.name))
             elif is_str3ds:
                 self._write_stds(data, dims)
             else:
@@ -263,7 +269,7 @@ class XarrayToGrass:
                     "Accepted values: 'days', 'hours', 'minutes', 'seconds'."
                 )
             # Validate that the unit is supported by both pandas and GRASS
-            supported_units = ["days", "hours", "minutes", "seconds"]
+            supported_units: list[str] = ["days", "hours", "minutes", "seconds"]
             if time_unit not in supported_units:
                 raise ValueError(
                     f"Unsupported time unit '{time_unit}' for relative time in DataArray '{data.name}'. "
@@ -284,21 +290,22 @@ class XarrayToGrass:
             arr_type = "raster3d"
 
         # Check if exists
+        data_name = str(data.name)
         if "strds" == stds_type:
             if (
                 not self.grass_interface.overwrite
-                and self.grass_interface.name_is_strds(data.name)
+                and self.grass_interface.name_is_strds(data_name)
             ):
                 raise RuntimeError(
-                    f"STRDS {data.name} already exists and will not be overwritten."
+                    f"STRDS {data_name} already exists and will not be overwritten."
                 )
         elif "str3ds" == stds_type:
             if (
                 not self.grass_interface.overwrite
-                and self.grass_interface.name_is_str3ds(data.name)
+                and self.grass_interface.name_is_str3ds(data_name)
             ):
                 raise RuntimeError(
-                    f"STR3DS {data.name} already exists and will not be overwritten."
+                    f"STR3DS {data_name} already exists and will not be overwritten."
                 )
         else:
             raise ValueError(f"Unknown STDS type '{stds_type}'.")
@@ -318,7 +325,7 @@ class XarrayToGrass:
                 nd_array[np.isinf(nd_array)] = np.nan
 
             # 3.1 Write each map individually
-            raster_name = f"{data.name}_{temporal_type}_{index}"
+            raster_name = f"{data_name}_{temporal_type}_{index}"
             if not is_3d:
                 self.grass_interface.write_raster_map(
                     arr=nd_array, rast_name=raster_name
@@ -338,7 +345,7 @@ class XarrayToGrass:
         # 4. Create STDS and register the maps in it
         self.grass_interface.register_maps_in_stds(
             stds_title="",
-            stds_name=data.name,
+            stds_name=data_name,
             stds_desc="",
             map_list=map_list,
             semantic=semantic_type,
