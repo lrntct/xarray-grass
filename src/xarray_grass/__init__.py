@@ -7,4 +7,4 @@ from xarray_grass.grass_interface import GrassInterface as GrassInterface
 from xarray_grass.to_grass import to_grass as to_grass
 from xarray_grass.xarray_grass import GrassBackendEntrypoint as GrassBackendEntrypoint
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
