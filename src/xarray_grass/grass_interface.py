@@ -12,29 +12,28 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
-import os
 import math
+import os
 from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Self, Optional
+from typing import Optional, Self
 
-import numpy as np
-import pandas as pd
-
+import grass.pygrass.utils as gutils
 
 # Needed to import grass modules
 import grass.script as gs
-from grass.script import array as garray
-import grass.pygrass.utils as gutils
+import grass.temporal as tgis
+import numpy as np
+import pandas as pd
 from grass.pygrass import raster as graster
 from grass.pygrass.raster.abstract import Info, RasterAbstractBase
-import grass.temporal as tgis
+from grass.script import array as garray
 
 from xarray_grass.coord_utils import (
-    region_type_dict,
     RegionData,
+    region_type_dict,
 )
 
 gs.core.set_raise_on_error(True)

@@ -13,18 +13,20 @@ GNU General Public License for more details.
 """
 
 from __future__ import annotations
+
 import os
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from xarray.backends import BackendEntrypoint
 import xarray as xr
+from xarray.backends import BackendEntrypoint
 from xarray.core.indexing import LazilyIndexedArray
 
 import xarray_grass
-from xarray_grass.grass_interface import GrassInterface
 from xarray_grass.grass_backend_array import GrassSTDSBackendArray
+from xarray_grass.grass_interface import GrassInterface
 
 if TYPE_CHECKING:
     from xarray.core.types import ReadBuffer

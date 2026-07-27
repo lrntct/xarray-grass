@@ -14,10 +14,10 @@ GNU General Public License for more details.
 """
 
 from collections import namedtuple
-from typing import Mapping
+from collections.abc import Mapping
+
 import numpy as np
 import xarray as xr  # For type hinting xr.DataArray
-
 
 region_type_dict = {
     "projection": str,

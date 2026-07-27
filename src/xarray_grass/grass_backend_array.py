@@ -13,12 +13,12 @@ GNU General Public License for more details.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 import threading
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
-
 from xarray.backends import BackendArray
 
 if TYPE_CHECKING:

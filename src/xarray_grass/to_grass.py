@@ -14,13 +14,15 @@ GNU General Public License for more details.
 """
 
 from __future__ import annotations
-import os
-from typing import TYPE_CHECKING, Mapping
 
-from pyproj import CRS
-import xarray as xr
+import os
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
+import xarray as xr
+from pyproj import CRS
 
 from xarray_grass.coord_utils import get_region_from_xarray
 
