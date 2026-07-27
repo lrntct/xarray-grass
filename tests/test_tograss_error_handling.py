@@ -105,6 +105,18 @@ class TestToGrassErrorHandling:
 
 @pytest.mark.usefixtures("grass_session_fixture")
 class TestToGrassInputValidation:
+    def test_unnamed_dataarray(self):
+        unnamed = xr.DataArray(
+            np.ones((2, 2)),
+            coords={"y": [0, 1], "x": [0, 1]},
+            dims=("y", "x"),
+        )
+
+        with pytest.raises(
+            ValueError, match="GRASS object names must be non-empty strings"
+        ):
+            to_grass(unnamed)
+
     def test_invalid_dataset_type(self, temp_gisdb, grass_i: GrassInterface):
         """Test error handling for invalid 'dataset' parameter type.
         That a first try. Let's see how it goes considering that the tested code uses duck typing."""

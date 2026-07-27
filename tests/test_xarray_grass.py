@@ -259,6 +259,21 @@ class TestXarrayGrass:
         assert len(test_dataset.x) == region.cols
         assert len(test_dataset.y) == region.rows
 
+    def test_drop_variable_string(self, grass_i, temp_gisdb) -> None:
+        mapset_path = os.path.join(
+            str(temp_gisdb.gisdb), str(temp_gisdb.project), str(temp_gisdb.mapset)
+        )
+        test_dataset = xr.open_dataset(
+            mapset_path,
+            raster=[ACTUAL_RASTER_MAP, ACTUAL_RASTER_MAP2],
+            drop_variables=ACTUAL_RASTER_MAP,
+        )
+
+        dropped_name = grass_i.get_name_from_id(ACTUAL_RASTER_MAP)
+        retained_name = grass_i.get_name_from_id(ACTUAL_RASTER_MAP2)
+        assert dropped_name not in test_dataset
+        assert retained_name in test_dataset
+
     def test_attributes_separation(self, grass_i, temp_gisdb) -> None:
         """Test that DataArray attributes don't leak to Dataset level."""
         mapset_path = os.path.join(

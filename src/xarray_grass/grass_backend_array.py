@@ -15,14 +15,14 @@ GNU General Public License for more details.
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-import xarray as xr
 from xarray.backends import BackendArray
+from xarray.core import indexing
 
 if TYPE_CHECKING:
-    from xarray_grass.grass_interface import GrassInterface
+    from xarray_grass.grass_interface import GrassInterface, MapData
 
 
 class GrassSTDSBackendArray(BackendArray):
@@ -30,30 +30,30 @@ class GrassSTDSBackendArray(BackendArray):
 
     def __init__(
         self,
-        shape,
-        dtype,
-        map_list: list,  # List of map metadata objects
-        map_type: str,
+        shape: tuple[int, ...],
+        dtype: np.dtype[Any],
+        map_list: list[MapData],
+        map_type: Literal["raster", "raster3d"],
         grass_interface: GrassInterface,
-    ):
+    ) -> None:
         self.shape = shape
         self.dtype = dtype
         self._lock = threading.Lock()
-        self.map_list = map_list  # List with .id attribute
-        self.map_type = map_type  # "raster" or "raster3d"
+        self.map_list = map_list
+        self.map_type = map_type
         self.grass_interface = grass_interface
-        self._cached_maps = {}  # Cache loaded maps by index
+        self._cached_maps: dict[int, np.ndarray] = {}
 
-    def __getitem__(self, key: xr.core.indexing.ExplicitIndexer) -> np.typing.ArrayLike:
+    def __getitem__(self, key: indexing.ExplicitIndexer) -> np.ndarray:
         """takes in input an index and returns a NumPy array"""
-        return xr.core.indexing.explicit_indexing_adapter(
+        return indexing.explicit_indexing_adapter(
             key,
             self.shape,
-            xr.core.indexing.IndexingSupport.BASIC,
+            indexing.IndexingSupport.BASIC,
             self._raw_indexing_method,
         )
 
-    def _raw_indexing_method(self, key: tuple):
+    def _raw_indexing_method(self, key: tuple[Any, ...]) -> np.ndarray:
         """Load only the maps needed for the requested slice"""
         with self._lock:
             # key is a tuple of slices/indices for each dimension
@@ -70,7 +70,7 @@ class GrassSTDSBackendArray(BackendArray):
                 time_indices = list(time_key)
 
             # Load only the needed maps
-            result_list = []
+            result_list: list[np.ndarray] = []
             for t_idx in time_indices:
                 if t_idx not in self._cached_maps:
                     map_data = self.map_list[t_idx]

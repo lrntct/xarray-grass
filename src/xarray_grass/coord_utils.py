@@ -13,8 +13,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
-from collections import namedtuple
 from collections.abc import Mapping
+from typing import NamedTuple
 
 import numpy as np
 import xarray as xr  # For type hinting xr.DataArray
@@ -41,14 +41,34 @@ region_type_dict = {
     "cells": int,
     "cells3": int,
 }
-RegionData = namedtuple(
-    "RegionData",
-    region_type_dict.keys(),
-    defaults=[None for _ in region_type_dict.keys()],
-)
 
 
-def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) -> dict:
+class RegionData(NamedTuple):
+    projection: str | None = None
+    zone: str | None = None
+    n: float | None = None
+    s: float | None = None
+    w: float | None = None
+    e: float | None = None
+    t: float | None = None
+    b: float | None = None
+    nsres: float | None = None
+    nsres3: float | None = None
+    ewres: float | None = None
+    ewres3: float | None = None
+    tbres: float | None = None
+    rows: int | None = None
+    rows3: int | None = None
+    cols: int | None = None
+    cols3: int | None = None
+    depths: int | None = None
+    cells: int | None = None
+    cells3: int | None = None
+
+
+def get_region_from_xarray(
+    data_array: xr.DataArray, dims: Mapping[str, str]
+) -> RegionData:
     """
     Calculates GRASS GIS region parameters from an xarray DataArray.
 
@@ -73,8 +93,8 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
 
     Returns
     -------
-    dict
-        A dictionary containing GRASS region parameters:
+    RegionData
+        GRASS region parameters:
         'n', 's', 'e', 'w': float or None (geographical limits)
         't', 'b': float or None (top, bottom limits for 3D)
         'nsres', 'ewres': float or None (2D resolutions)
@@ -84,7 +104,7 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
     """
     region = {}
 
-    def _calculate_res(coords_arr_np: np.ndarray) -> float | None:
+    def _calculate_res(coords_arr_np: np.ndarray | None) -> float | None:
         if coords_arr_np is not None and len(coords_arr_np) >= 2:
             # Ensure consistent dtype for subtraction, then convert to float
             res = np.abs(
@@ -95,7 +115,7 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
 
     # Determine if it's 3D based on presence of z-coordinate name in dims and data_array
     z_name = dims.get("z")
-    is_3d = z_name and z_name in data_array.coords
+    is_3d = z_name is not None and z_name in data_array.coords
 
     x_coords_np, y_coords_np, z_coords_np = None, None, None
 
@@ -177,4 +197,16 @@ def get_region_from_xarray(data_array: xr.DataArray, dims: Mapping[str, str]) ->
         region["b"] = float(z_coords_np[0] - region["tbres"] / 2)
         region["t"] = float(z_coords_np[-1] + region["tbres"] / 2)
 
-    return RegionData(**region)
+    return RegionData(
+        n=region.get("n"),
+        s=region.get("s"),
+        w=region.get("w"),
+        e=region.get("e"),
+        t=region.get("t"),
+        b=region.get("b"),
+        nsres=region.get("nsres"),
+        nsres3=region.get("nsres3"),
+        ewres=region.get("ewres"),
+        ewres3=region.get("ewres3"),
+        tbres=region.get("tbres"),
+    )
