@@ -95,10 +95,18 @@ The attributes of the coordinates are in line with CF Conventions.
 ### Dataset attributes
 
 The attributes set at the dataset level are:
-  - `crs_wkt` from the g.proj command
+  - `crs_wkt` from the `g.proj` command
   - `Conventions`, the CF Convention version
   - `history`, the time of creation and version of xarray-grass
   - `source`, the name of the current grass project and mapset
+
+For a GRASS XY (unprojected) location, `g.proj` does not provide a CRS and
+returns the display label `XY location (unprojected)`. xarray-grass represents
+such a location as a WKT2 engineering CRS named `XY location (unprojected)`,
+with a Cartesian east/north coordinate system measured in metres. This keeps
+the location explicitly local rather than assigning a geographic or projected
+CRS, while ensuring that `crs_wkt` can be parsed by WKT consumers such as
+`pyproj.CRS.from_wkt`.
 
 ## Writing an Xarray Dataset or DataArray to GRASS
 

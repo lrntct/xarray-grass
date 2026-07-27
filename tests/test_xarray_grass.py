@@ -18,6 +18,7 @@ import os
 
 import pytest
 import xarray as xr
+from pyproj import CRS
 
 from xarray_grass.xarray_grass import dir_is_grass_mapset
 from xarray_grass.xarray_grass import dir_is_grass_project
@@ -304,6 +305,8 @@ class TestXarrayGrass:
         assert test_dataset.attrs["Conventions"] == "CF-1.13-draft"
         assert "crs_wkt" in test_dataset.attrs
         assert isinstance(test_dataset.attrs["crs_wkt"], str)
+        exported_crs = CRS.from_wkt(test_dataset.attrs["crs_wkt"])
+        assert exported_crs.equals(CRS.from_wkt(grass_i.get_crs_wkt_str()))
 
         # DataArray-level attributes that should NOT appear at Dataset level
         dataarray_only_attrs = {"long_name", "units", "comment"}

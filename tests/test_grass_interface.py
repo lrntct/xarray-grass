@@ -24,6 +24,7 @@ import numpy as np
 import grass_session  # noqa: F401
 import grass.script as gs
 import grass.exceptions as gexceptions
+from pyproj import CRS
 
 from xarray_grass import GrassInterface, RegionData
 
@@ -186,6 +187,17 @@ class TestGrassInterface:
         ref_str = gs.read_command("g.proj", flags="wf")
         assert crs_str == ref_str.replace("\n", "")
         assert isinstance(crs_str, str)
+        assert CRS.from_wkt(crs_str).equals(CRS.from_wkt(ref_str))
+
+    def test_get_crs_wkt_str_for_xy_location(self, monkeypatch):
+        monkeypatch.setattr(GrassInterface, "is_xy", staticmethod(lambda: True))
+
+        crs = CRS.from_wkt(GrassInterface.get_crs_wkt_str())
+
+        assert crs.name == "XY location (unprojected)"
+        assert crs.is_engineering
+        assert [axis.direction for axis in crs.axis_info] == ["east", "north"]
+        assert all(axis.unit_name == "metre" for axis in crs.axis_info)
 
     def test_has_mask(self):
         assert GrassInterface.has_mask() is False
