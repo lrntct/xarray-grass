@@ -40,6 +40,15 @@ from xarray_grass.coord_utils import (
 gs.core.set_raise_on_error(True)
 
 
+XY_LOCATION_CRS_WKT = (
+    'ENGCRS["XY location (unprojected)",'
+    'EDATUM["Unknown engineering datum"],'
+    "CS[Cartesian,2],"
+    'AXIS["x",east,ORDER[1],LENGTHUNIT["metre",1]],'
+    'AXIS["y",north,ORDER[2],LENGTHUNIT["metre",1]]]'
+)
+
+
 @dataclass
 class GrassConfig:
     gisdb: str | Path
@@ -244,7 +253,8 @@ class GrassInterface(object):
     def is_latlon() -> bool:
         return bool(gs.locn_is_latlong())
 
-    def is_xy(self) -> bool:
+    @staticmethod
+    def is_xy() -> bool:
         """return True if the location is neither projected or latlon"""
         proj_code = gs.parse_command("g.region", flags="pug")["projection"]
         if int(proj_code) == 0:
@@ -312,6 +322,8 @@ class GrassInterface(object):
 
     @staticmethod
     def get_crs_wkt_str() -> str:
+        if GrassInterface.is_xy():
+            return XY_LOCATION_CRS_WKT
         return gs.read_command("g.proj", flags="wf").replace("\n", "")
 
     def grass_dtype(self, dtype: str) -> str:
