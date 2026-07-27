@@ -12,17 +12,42 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
+from __future__ import annotations
+
 import os
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Any, Callable, TypedDict
 
-from xarray.backends import BackendEntrypoint
 import xarray as xr
+from xarray.backends import BackendEntrypoint
+from xarray.core.indexing import LazilyIndexedArray
 
 import xarray_grass
-from xarray_grass.grass_interface import GrassInterface
 from xarray_grass.grass_backend_array import GrassSTDSBackendArray
+from xarray_grass.grass_interface import GrassInterface
+
+if TYPE_CHECKING:
+    from xarray.backends.common import AbstractDataStore
+    from xarray.core.types import ReadBuffer
+
+
+class OpenMapParams(TypedDict):
+    raster_list: list[str]
+    raster_3d_list: list[str]
+    strds_list: list[str]
+    str3ds_list: list[str]
+
+
+def _path_from_input(filename_or_obj: object) -> Path:
+    if isinstance(filename_or_obj, str):
+        return Path(filename_or_obj)
+    if isinstance(filename_or_obj, os.PathLike):
+        path_value = filename_or_obj.__fspath__()
+        if isinstance(path_value, str):
+            return Path(path_value)
+    raise TypeError("The GRASS backend requires a text filesystem path.")
 
 
 class GrassBackendEntrypoint(BackendEntrypoint):
@@ -42,13 +67,13 @@ class GrassBackendEntrypoint(BackendEntrypoint):
 
     def open_dataset(
         self,
-        filename_or_obj,
+        filename_or_obj: str | os.PathLike[Any] | ReadBuffer | AbstractDataStore,
         *,
-        raster: Optional[str | Iterable[str]] = None,
-        raster_3d: Optional[str | Iterable[str]] = None,
-        strds: Optional[str | Iterable[str]] = None,
-        str3ds: Optional[str | Iterable[str]] = None,
-        drop_variables: Iterable[str],
+        raster: str | Iterable[str] | None = None,
+        raster_3d: str | Iterable[str] | None = None,
+        strds: str | Iterable[str] | None = None,
+        str3ds: str | Iterable[str] | None = None,
+        drop_variables: str | Iterable[str] | None = None,
     ) -> xr.Dataset:
         """Open GRASS project or mapset as an xarray.Dataset.
         Requires an active GRASS session.
@@ -60,46 +85,70 @@ class GrassBackendEntrypoint(BackendEntrypoint):
                 "Please setup a GRASS session before trying to access GRASS data."
             )
 
-        if filename_or_obj:
-            dirpath = Path(filename_or_obj)
-            if not dir_is_grass_mapset(dirpath):
-                raise ValueError(f"{filename_or_obj} is not a GRASS mapset")
-                self.check_accessible_mapset(filename_or_obj)
+        dirpath = _path_from_input(filename_or_obj)
+        if not dir_is_grass_mapset(dirpath):
+            raise ValueError(f"{filename_or_obj} is not a GRASS mapset")
 
         self.grass_interface = GrassInterface()
+        self.check_accessible_mapset(dirpath)
 
-        open_func_params = dict(
-            raster_list=raster,
-            raster_3d_list=raster_3d,
-            strds_list=strds,
-            str3ds_list=str3ds,
+        def as_list(value: str | Iterable[str] | None) -> list[str]:
+            if isinstance(value, str):
+                return [value]
+            if value is None:
+                return []
+            return list(value)
+
+        open_func_params = OpenMapParams(
+            raster_list=as_list(raster),
+            raster_3d_list=as_list(raster_3d),
+            strds_list=as_list(strds),
+            str3ds_list=as_list(str3ds),
         )
         if not any([raster, raster_3d, strds, str3ds]):
             self._list_all_mapset(open_func_params)
-        else:
-            # Format str inputs into list
-            for object_type, elem in open_func_params.items():
-                if isinstance(elem, str):
-                    open_func_params[object_type] = [elem]
-                elif elem is None:
-                    open_func_params[object_type] = []
-                else:
-                    open_func_params[object_type] = list(elem)
         # drop requested variables
         if drop_variables is not None:
-            for object_type, grass_obj_name_list in open_func_params.items():
-                open_func_params[object_type] = [
-                    name for name in grass_obj_name_list if name not in drop_variables
-                ]
+            dropped_names = (
+                {drop_variables}
+                if isinstance(drop_variables, str)
+                else set(drop_variables)
+            )
+            open_func_params = OpenMapParams(
+                raster_list=[
+                    name
+                    for name in open_func_params["raster_list"]
+                    if name not in dropped_names
+                ],
+                raster_3d_list=[
+                    name
+                    for name in open_func_params["raster_3d_list"]
+                    if name not in dropped_names
+                ],
+                strds_list=[
+                    name
+                    for name in open_func_params["strds_list"]
+                    if name not in dropped_names
+                ],
+                str3ds_list=[
+                    name
+                    for name in open_func_params["str3ds_list"]
+                    if name not in dropped_names
+                ],
+            )
 
-        return self._open_grass_maps(filename_or_obj, **open_func_params)
+        return self._open_grass_maps(dirpath, **open_func_params)
 
-    def guess_can_open(self, filename_or_obj) -> bool:
+    def guess_can_open(self, filename_or_obj: object) -> bool:
         """infer if the path is a GRASS mapset.
         TODO: add support for whole project."""
-        return dir_is_grass_mapset(filename_or_obj)
+        try:
+            dirpath = _path_from_input(filename_or_obj)
+        except TypeError:
+            return False
+        return dir_is_grass_mapset(dirpath)
 
-    def _list_all_mapset(self, open_func_params):
+    def _list_all_mapset(self, open_func_params: OpenMapParams) -> None:
         """List map objects in the whole mapset.
         If a map is part of a STDS, do not list it as a single map.
         """
@@ -109,19 +158,13 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         for strds_name in grass_objects["strds"]:
             maps_in_strds = self.grass_interface.list_maps_in_strds(strds_name)
             rasters_in_strds.extend([map_data.id for map_data in maps_in_strds])
-            if open_func_params["strds_list"] is None:
-                open_func_params["strds_list"] = [strds_name]
-            else:
-                open_func_params["strds_list"].append(strds_name)
+            open_func_params["strds_list"].append(strds_name)
         raster3ds_in_str3ds = []
         # str3ds
         for str3ds_name in grass_objects["str3ds"]:
             maps_in_str3ds = self.grass_interface.list_maps_in_str3ds(str3ds_name)
             raster3ds_in_str3ds.extend([map_data.id for map_data in maps_in_str3ds])
-            if open_func_params["str3ds_list"] is None:
-                open_func_params["str3ds_list"] = [str3ds_name]
-            else:
-                open_func_params["str3ds_list"].append(str3ds_name)
+            open_func_params["str3ds_list"].append(str3ds_name)
         # rasters not in strds
         open_func_params["raster_list"] = [
             name for name in grass_objects["raster"] if name not in rasters_in_strds
@@ -133,8 +176,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             if name not in raster3ds_in_str3ds
         ]
 
-    def check_accessible_mapset(self, filename_or_obj):
-        dirpath = Path(filename_or_obj)
+    def check_accessible_mapset(self, dirpath: Path) -> None:
         mapset = dirpath.stem
         project_path = dirpath.parent
         gisdb_path = project_path.parent
@@ -158,52 +200,66 @@ class GrassBackendEntrypoint(BackendEntrypoint):
 
     def _open_grass_maps(
         self,
-        filename_or_obj: str | Path,
-        raster_list: Iterable[str] = None,
-        raster_3d_list: Iterable[str] = None,
-        strds_list: Iterable[str] = None,
-        str3ds_list: Iterable[str] = None,
+        filename_or_obj: Path,
+        raster_list: list[str],
+        raster_3d_list: list[str],
+        strds_list: list[str],
+        str3ds_list: list[str],
     ) -> xr.Dataset:
         """
         Open a GRASS mapset and return an xarray dataset.
         """
         # Configuration for processing different GRASS map types
-        map_processing_configs = [
-            {
-                "input_list": raster_list,
-                "existence_check_method": self.grass_interface.name_is_raster,
-                "open_function": self._open_grass_raster,
-                "not_found_key": "raster",
-            },
-            {
-                "input_list": raster_3d_list,
-                "existence_check_method": self.grass_interface.name_is_raster_3d,
-                "open_function": self._open_grass_raster_3d,
-                "not_found_key": "raster_3d",
-            },
-            {
-                "input_list": strds_list,
-                "existence_check_method": self.grass_interface.name_is_strds,
-                "open_function": self._open_grass_strds,
-                "not_found_key": "strds",
-            },
-            {
-                "input_list": str3ds_list,
-                "existence_check_method": self.grass_interface.name_is_str3ds,
-                "open_function": self._open_grass_str3ds,
-                "not_found_key": "str3ds",
-            },
+        map_processing_configs: list[
+            tuple[
+                list[str],
+                Callable[[str], bool],
+                Callable[[str], xr.DataArray],
+                str,
+            ]
+        ] = [
+            (
+                raster_list,
+                self.grass_interface.name_is_raster,
+                self._open_grass_raster,
+                "raster",
+            ),
+            (
+                raster_3d_list,
+                self.grass_interface.name_is_raster_3d,
+                self._open_grass_raster_3d,
+                "raster_3d",
+            ),
+            (
+                strds_list,
+                self.grass_interface.name_is_strds,
+                self._open_grass_strds,
+                "strds",
+            ),
+            (
+                str3ds_list,
+                self.grass_interface.name_is_str3ds,
+                self._open_grass_str3ds,
+                "str3ds",
+            ),
         ]
         # Open all given maps and identify non-existent data
-        not_found = {config["not_found_key"]: [] for config in map_processing_configs}
-        data_array_list = []
+        not_found: dict[str, list[str]] = {
+            not_found_key: [] for _, _, _, not_found_key in map_processing_configs
+        }
+        data_array_list: list[xr.DataArray] = []
         raw_coords_list = []
-        for config in map_processing_configs:
-            for map_name in config["input_list"]:
-                if not config["existence_check_method"](map_name):
-                    not_found[config["not_found_key"]].append(map_name)
+        for (
+            input_list,
+            existence_check,
+            open_function,
+            not_found_key,
+        ) in map_processing_configs:
+            for map_name in input_list:
+                if not existence_check(map_name):
+                    not_found[not_found_key].append(map_name)
                     continue
-                data_array = config["open_function"](map_name)
+                data_array = open_function(map_name)
                 raw_coords_list.append(data_array.coords)
                 data_array_list.append(data_array)
         if any(not_found.values()):
@@ -240,7 +296,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         da: xr.DataArray,
         is_3d: bool,
         z_unit: str = "",
-        time_dims: Optional[list[str, str]] = None,
+        time_dims: tuple[str, str] | None = None,
         time_unit: str = "",
     ):
         """Set coordinate attributes according to CF conventions"""
@@ -355,12 +411,14 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         if strds_infos.temporal_type == "absolute":
             time_unit = ""
         else:
-            time_unit = strds_infos.time_unit
+            time_unit = strds_infos.time_unit or ""
         start_time_dim = f"start_time_{strds_name}"
         end_time_dim = f"end_time_{strds_name}"
 
         map_list = self.grass_interface.list_maps_in_strds(strds_id)
         region = self.grass_interface.get_region()
+        if region.rows is None or region.cols is None:
+            raise ValueError("The current GRASS region is missing its 2D shape.")
 
         # Create a single backend array for the entire STRDS
         backend_array = GrassSTDSBackendArray(
@@ -370,7 +428,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             map_type="raster",
             grass_interface=self.grass_interface,
         )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        lazy_array = LazilyIndexedArray(backend_array)
 
         # Create Variable with lazy array
         var = xr.Variable(dims=[start_time_dim, "y", "x"], data=lazy_array)
@@ -399,7 +457,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         da_with_attrs = self._set_cf_coordinates_attributes(
             data_array,
             is_3d=False,
-            time_dims=[start_time_dim, end_time_dim],
+            time_dims=(start_time_dim, end_time_dim),
             time_unit=time_unit,
         )
         da_with_attrs.attrs["long_name"] = strds_infos.title
@@ -424,12 +482,14 @@ class GrassBackendEntrypoint(BackendEntrypoint):
         if strds_infos.temporal_type == "absolute":
             time_unit = ""
         else:
-            time_unit = strds_infos.time_unit
+            time_unit = strds_infos.time_unit or ""
         start_time_dim = f"start_time_{str3ds_name}"
         end_time_dim = f"end_time_{str3ds_name}"
 
         map_list = self.grass_interface.list_maps_in_str3ds(str3ds_id)
         region = self.grass_interface.get_region()
+        if region.depths is None or region.rows3 is None or region.cols3 is None:
+            raise ValueError("The current GRASS region is missing its 3D shape.")
 
         # Create a single backend array for the entire STR3DS
         backend_array = GrassSTDSBackendArray(
@@ -439,7 +499,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             map_type="raster3d",
             grass_interface=self.grass_interface,
         )
-        lazy_array = xr.core.indexing.LazilyIndexedArray(backend_array)
+        lazy_array = LazilyIndexedArray(backend_array)
 
         # Create Variable with lazy array
         var = xr.Variable(dims=[start_time_dim, "z", "y_3d", "x_3d"], data=lazy_array)
@@ -470,7 +530,7 @@ class GrassBackendEntrypoint(BackendEntrypoint):
             data_array,
             is_3d=True,
             z_unit=r3_infos["vertical_units"],
-            time_dims=[start_time_dim, end_time_dim],
+            time_dims=(start_time_dim, end_time_dim),
             time_unit=time_unit,
         )
         da_with_attrs.attrs["long_name"] = strds_infos.title

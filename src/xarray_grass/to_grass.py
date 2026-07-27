@@ -14,13 +14,16 @@ GNU General Public License for more details.
 """
 
 from __future__ import annotations
-import os
-from typing import TYPE_CHECKING, Mapping, Optional
 
-from pyproj import CRS
-import xarray as xr
+import os
+from collections.abc import Mapping
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
+import xarray as xr
+from pyproj import CRS
 
 from xarray_grass.coord_utils import get_region_from_xarray
 
@@ -28,9 +31,15 @@ if TYPE_CHECKING:
     from xarray_grass.grass_interface import GrassInterface
 
 
+def _validate_name(name: object) -> str:
+    if not isinstance(name, str) or not name:
+        raise ValueError("GRASS object names must be non-empty strings.")
+    return name
+
+
 def to_grass(
     dataset: xr.Dataset | xr.DataArray,
-    dims: Optional[Mapping[str, Mapping[str, str]]] = None,
+    dims: Mapping[str, Mapping[str, str]] | None = None,
     overwrite: bool = False,
 ) -> None:
     """Convert an xarray.Dataset or xarray.DataArray to GRASS GIS maps.
@@ -69,9 +78,11 @@ def to_grass(
     from xarray_grass.grass_interface import GrassInterface
 
     if isinstance(dataset, xr.Dataset):
-        input_var_names = [var_name for var_name, _ in dataset.data_vars.items()]
+        input_var_names: list[str] = [
+            _validate_name(var_name) for var_name in dataset.data_vars
+        ]
     elif isinstance(dataset, xr.DataArray):
-        input_var_names = [dataset.name]
+        input_var_names = [_validate_name(dataset.name)]
     else:
         raise TypeError(
             f"'dataset must be either an Xarray DataArray or Dataset, not {type(dataset)}"
@@ -91,7 +102,7 @@ class DimensionsFormatter:
     """Populate the dimension mapping based on default values and user-provided ones"""
 
     # Default dimension names
-    default_dims = {
+    default_dims: dict[str, str] = {
         "start_time": "start_time",
         "end_time": "end_time",
         "x": "x",
@@ -101,10 +112,14 @@ class DimensionsFormatter:
         "z": "z",
     }
 
-    def __init__(self, input_var_names, input_dims):
+    def __init__(
+        self,
+        input_var_names: list[str],
+        input_dims: Mapping[str, Mapping[str, str]] | None,
+    ) -> None:
         self.input_var_names = input_var_names
         self.input_dims = input_dims
-        self._dataset_dims = {}
+        self._dataset_dims: dict[str, dict[str, str]] = {}
 
         # Instantiate the dimensions with default values
         for var_name in input_var_names:
@@ -115,7 +130,7 @@ class DimensionsFormatter:
         if self.input_dims is not None:
             self.check_input_dims()
 
-    def check_input_dims(self):
+    def check_input_dims(self) -> None:
         """Check conformity of provided dims Mapping"""
         if not isinstance(self.input_dims, Mapping):
             raise TypeError(
@@ -132,13 +147,15 @@ class DimensionsFormatter:
                     f"Variables found: {self.input_var_names}"
                 )
 
-    def fill_dims(self):
+    def fill_dims(self) -> None:
         """Replace the default values with those given by the user."""
+        if self.input_dims is None:
+            return
         for var_name, dims in self.input_dims.items():
             for dim_key, dim_value in dims.items():
                 self._dataset_dims[var_name][dim_key] = dim_value
 
-    def get_formatted_dims(self):
+    def get_formatted_dims(self) -> dict[str, dict[str, str]]:
         if self.input_dims is not None:
             self.fill_dims()
         return self._dataset_dims
@@ -149,7 +166,7 @@ class XarrayToGrass:
         self,
         dataset: xr.Dataset | xr.DataArray,
         grass_interface: GrassInterface,
-        dims: Mapping[str, str] = None,
+        dims: Mapping[str, Mapping[str, str]],
     ):
         self.dataset = dataset
         self.grass_interface = grass_interface
@@ -168,11 +185,13 @@ class XarrayToGrass:
                 f"CRS mismatch: GRASS project CRS is {grass_crs}, "
                 f"but dataset CRS is {dataset_crs}."
             )
-        try:
+        if isinstance(self.dataset, xr.Dataset):
             for var_name, data in self.dataset.data_vars.items():
-                self._datarray_to_grass(data, self.dataset_dims[var_name])
-        except AttributeError:  # DataArray
-            self._datarray_to_grass(self.dataset, self.dataset_dims[self.dataset.name])
+                name = _validate_name(var_name)
+                self._datarray_to_grass(data, self.dataset_dims[name])
+        else:
+            name = _validate_name(self.dataset.name)
+            self._datarray_to_grass(self.dataset, self.dataset_dims[name])
 
     def _datarray_to_grass(
         self,
@@ -180,6 +199,7 @@ class XarrayToGrass:
         dims: Mapping[str, str],
     ) -> None:
         """Convert an xarray DataArray to GRASS maps."""
+        data_name = _validate_name(data.name)
         if len(data.dims) > 4 or len(data.dims) < 2:
             raise ValueError(
                 f"Only DataArray with 2 to 4 dimensions are supported. "
@@ -216,12 +236,12 @@ class XarrayToGrass:
         try:
             if is_raster:
                 data = self.transpose(data, dims, arr_type="raster")
-                self.grass_interface.write_raster_map(data, data.name)
+                self.grass_interface.write_raster_map(data.values, data_name)
             elif is_strds:
                 self._write_stds(data, dims)
             elif is_raster_3d:
                 data = self.transpose(data, dims, arr_type="raster3d")
-                self.grass_interface.write_raster3d_map(data, data.name)
+                self.grass_interface.write_raster3d_map(data.values, data_name)
             elif is_str3ds:
                 self._write_stds(data, dims)
             else:
@@ -234,7 +254,10 @@ class XarrayToGrass:
             self.grass_interface.set_region(current_region)
 
     def transpose(
-        self, da: xr.DataArray, dims, arr_type: str = "raster"
+        self,
+        da: xr.DataArray,
+        dims: Mapping[str, str],
+        arr_type: str = "raster",
     ) -> xr.DataArray:
         """Force dimension order to conform with grass expectation."""
         if "raster" == arr_type:
@@ -246,7 +269,7 @@ class XarrayToGrass:
                 f"Unknown array type: {arr_type}. Must be 'raster' or 'raster3d'."
             )
 
-    def _write_stds(self, data: xr.DataArray, dims: Mapping):
+    def _write_stds(self, data: xr.DataArray, dims: Mapping[str, str]) -> None:
         # 1. Determine the temporal coordinate and type
         time_coord = data[dims["start_time"]]
         time_dtype = time_coord.dtype
@@ -255,15 +278,16 @@ class XarrayToGrass:
             temporal_type = "absolute"
         elif np.issubdtype(time_dtype, np.integer):
             temporal_type = "relative"
-            time_unit = time_coord.attrs.get("units", None)
-            if not time_unit:
+            raw_time_unit = time_coord.attrs.get("units")
+            if not isinstance(raw_time_unit, str) or not raw_time_unit:
                 raise ValueError(
                     f"Relative time coordinate '{dims['start_time']}' in DataArray '{data.name}' "
                     "requires a 'units' attribute. "
                     "Accepted values: 'days', 'hours', 'minutes', 'seconds'."
                 )
+            time_unit = raw_time_unit
             # Validate that the unit is supported by both pandas and GRASS
-            supported_units = ["days", "hours", "minutes", "seconds"]
+            supported_units: list[str] = ["days", "hours", "minutes", "seconds"]
             if time_unit not in supported_units:
                 raise ValueError(
                     f"Unsupported time unit '{time_unit}' for relative time in DataArray '{data.name}'. "
@@ -284,27 +308,28 @@ class XarrayToGrass:
             arr_type = "raster3d"
 
         # Check if exists
+        data_name = _validate_name(data.name)
         if "strds" == stds_type:
             if (
                 not self.grass_interface.overwrite
-                and self.grass_interface.name_is_strds(data.name)
+                and self.grass_interface.name_is_strds(data_name)
             ):
                 raise RuntimeError(
-                    f"STRDS {data.name} already exists and will not be overwritten."
+                    f"STRDS {data_name} already exists and will not be overwritten."
                 )
         elif "str3ds" == stds_type:
             if (
                 not self.grass_interface.overwrite
-                and self.grass_interface.name_is_str3ds(data.name)
+                and self.grass_interface.name_is_str3ds(data_name)
             ):
                 raise RuntimeError(
-                    f"STR3DS {data.name} already exists and will not be overwritten."
+                    f"STR3DS {data_name} already exists and will not be overwritten."
                 )
         else:
             raise ValueError(f"Unknown STDS type '{stds_type}'.")
 
         # 3. Loop through the time dim:
-        map_list = []
+        map_list: list[tuple[str, datetime | timedelta]] = []
         for index, time in enumerate(time_coord):
             darray = data.sel({dims["start_time"]: time})
             darray = self.transpose(darray, dims, arr_type=arr_type)
@@ -318,7 +343,7 @@ class XarrayToGrass:
                 nd_array[np.isinf(nd_array)] = np.nan
 
             # 3.1 Write each map individually
-            raster_name = f"{data.name}_{temporal_type}_{index}"
+            raster_name = f"{data_name}_{temporal_type}_{index}"
             if not is_3d:
                 self.grass_interface.write_raster_map(
                     arr=nd_array, rast_name=raster_name
@@ -329,16 +354,25 @@ class XarrayToGrass:
                 )
             # 3.2 populate an iterable[tuple[str, datetime | timedelta]]
             time_value = time.values.item()
+            if pd.isna(time_value):
+                raise ValueError(
+                    f"Temporal coordinate '{dims['start_time']}' contains a missing value."
+                )
             if temporal_type == "absolute":
                 absolute_time = pd.Timestamp(time_value)
-                map_list.append((raster_name, absolute_time.to_pydatetime()))
+                python_time = absolute_time.to_pydatetime()
+                if not isinstance(python_time, datetime):
+                    raise ValueError("Absolute timestamps cannot contain NaT values.")
+                map_list.append((raster_name, python_time))
             else:
                 relative_time = pd.Timedelta(time_value, unit=time_unit)
+                if not isinstance(relative_time, pd.Timedelta):
+                    raise ValueError("Relative timestamps cannot contain NaT values.")
                 map_list.append((raster_name, relative_time.to_pytimedelta()))
         # 4. Create STDS and register the maps in it
         self.grass_interface.register_maps_in_stds(
             stds_title="",
-            stds_name=data.name,
+            stds_name=data_name,
             stds_desc="",
             map_list=map_list,
             semantic=semantic_type,

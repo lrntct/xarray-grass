@@ -12,29 +12,29 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 """
 
-import os
 import math
-from collections import namedtuple
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Self, Optional
+from typing import Any, Literal, NamedTuple, Self
 
-import numpy as np
-import pandas as pd
-
+import grass.pygrass.utils as gutils  # ty: ignore[unresolved-import]
 
 # Needed to import grass modules
-import grass.script as gs
-from grass.script import array as garray
-import grass.pygrass.utils as gutils
-from grass.pygrass import raster as graster
-from grass.pygrass.raster.abstract import Info, RasterAbstractBase
-import grass.temporal as tgis
+import grass.script as gs  # ty: ignore[unresolved-import]
+import grass.temporal as tgis  # ty: ignore[unresolved-import]
+import numpy as np
+from grass.pygrass import raster as graster  # ty: ignore[unresolved-import]
+from grass.pygrass.raster.abstract import (  # ty: ignore[unresolved-import]
+    Info,
+    RasterAbstractBase,
+)
+from grass.script import array as garray  # ty: ignore[unresolved-import]
 
 from xarray_grass.coord_utils import (
-    region_type_dict,
     RegionData,
+    region_type_dict,
 )
 
 gs.core.set_raise_on_error(True)
@@ -45,11 +45,18 @@ class GrassConfig:
     gisdb: str | Path
     project: str | Path
     mapset: str | Path
-    grassbin: str | Path
+    grassbin: str | Path | None
 
 
 strds_cols = ["id", "start_time", "end_time"]
-MapData = namedtuple("MapData", strds_cols + ["dtype"])
+
+
+class MapData(NamedTuple):
+    id: str
+    start_time: datetime | int
+    end_time: datetime | int | None
+    dtype: np.dtype[Any]
+
 
 strds_infos = [
     "id",
@@ -66,7 +73,22 @@ strds_infos = [
     "top",
     "bottom",
 ]
-STRDSInfos = namedtuple("STRDSInfos", strds_infos)
+
+
+class STRDSInfos(NamedTuple):
+    id: str
+    title: str
+    temporal_type: str
+    time_unit: str | None
+    start_time: datetime | int | None
+    end_time: datetime | int | None
+    time_granularity: str | int
+    north: float
+    south: float
+    east: float
+    west: float
+    top: float
+    bottom: float
 
 
 class GrassInterface(object):
@@ -104,7 +126,7 @@ class GrassInterface(object):
         tgis.init()
 
     @staticmethod
-    def get_gisenv() -> dict[str]:
+    def get_gisenv() -> dict[str, str]:
         """Return the current GRASS environment."""
         return gs.gisenv()
 
@@ -114,29 +136,53 @@ class GrassInterface(object):
         return gs.parse_command("g.mapsets", flags="p", format="json")["mapsets"]
 
     @staticmethod
-    def get_region() -> namedtuple:
+    def get_region() -> RegionData:
         """Return the current GRASS region."""
         region_raw = gs.parse_command("g.region", flags="g3")
 
-        region = {
-            k: region_type_dict[k](v) for k, v in region_raw.items() if v is not None
-        }
-        region = RegionData(**region)
-        return region
+        def value(key: str) -> Any:
+            raw_value = region_raw.get(key)
+            if raw_value is None:
+                return None
+            return region_type_dict[key](raw_value)
+
+        return RegionData(
+            projection=value("projection"),
+            zone=value("zone"),
+            n=value("n"),
+            s=value("s"),
+            w=value("w"),
+            e=value("e"),
+            t=value("t"),
+            b=value("b"),
+            nsres=value("nsres"),
+            nsres3=value("nsres3"),
+            ewres=value("ewres"),
+            ewres3=value("ewres3"),
+            tbres=value("tbres"),
+            rows=value("rows"),
+            rows3=value("rows3"),
+            cols=value("cols"),
+            cols3=value("cols3"),
+            depths=value("depths"),
+            cells=value("cells"),
+            cells3=value("cells3"),
+        )
 
     @staticmethod
     def set_region(region_data: RegionData) -> None:
         # 2D region
         if region_data.tbres is None:
-            if not all(
-                [
+            if any(
+                value is None
+                for value in (
                     region_data.n,
                     region_data.s,
                     region_data.e,
                     region_data.w,
                     region_data.nsres,
                     region_data.ewres,
-                ]
+                )
             ):
                 raise ValueError(
                     "n, s, e, w, nsres and ewres must be set for 2D regions."
@@ -153,6 +199,24 @@ class GrassInterface(object):
             )
         # 3D region
         else:
+            if any(
+                value is None
+                for value in (
+                    region_data.n,
+                    region_data.s,
+                    region_data.e,
+                    region_data.w,
+                    region_data.t,
+                    region_data.b,
+                    region_data.nsres3,
+                    region_data.ewres3,
+                )
+            ):
+                raise ValueError(
+                    "n, s, e, w, t, b, nsres3 and ewres3 must be set for 3D regions."
+                )
+            assert region_data.nsres3 is not None
+            assert region_data.ewres3 is not None
             # TODO: remove when grass 8.5 is released
             tolerance = 1e-9
             if not math.isclose(
@@ -177,10 +241,10 @@ class GrassInterface(object):
             )
 
     @staticmethod
-    def is_latlon():
-        return gs.locn_is_latlong()
+    def is_latlon() -> bool:
+        return bool(gs.locn_is_latlong())
 
-    def is_xy(self):
+    def is_xy(self) -> bool:
         """return True if the location is neither projected or latlon"""
         proj_code = gs.parse_command("g.region", flags="pug")["projection"]
         if int(proj_code) == 0:
@@ -188,8 +252,8 @@ class GrassInterface(object):
         else:
             return False
 
-    def get_spatial_units(self):
-        if self.is_xy:
+    def get_spatial_units(self) -> str | None:
+        if self.is_xy():
             return None
         else:
             return gs.parse_command("g.proj", flags="g")["units"]
@@ -264,7 +328,7 @@ class GrassInterface(object):
         return mtype
 
     @staticmethod
-    def numpy_dtype(mtype: str) -> np.dtype:
+    def numpy_dtype(mtype: str) -> np.dtype[Any]:
         if mtype == "CELL":
             dtype = np.dtype("int64")
         elif mtype == "FCELL":
@@ -281,29 +345,29 @@ class GrassInterface(object):
         return bool(gs.read_command("g.list", type="raster", pattern="MASK"))
 
     @staticmethod
-    def list_strds(mapset: str = None) -> list[str]:
+    def list_strds(mapset: str | None = None) -> list[str]:
         if mapset:
             return tgis.tlist_grouped("strds")[mapset]
         else:
             return tgis.tlist("strds")
 
     @staticmethod
-    def list_str3ds(mapset: str = None) -> list[str]:
+    def list_str3ds(mapset: str | None = None) -> list[str]:
         if mapset:
             return tgis.tlist_grouped("str3ds")[mapset]
         else:
             return tgis.tlist("str3ds")
 
     @staticmethod
-    def list_raster(mapset: str = None) -> list[str]:
+    def list_raster(mapset: str | None = None) -> list[str]:
         """List raster maps in the given mapset"""
         return gs.list_strings("raster", mapset=mapset)
 
     @staticmethod
-    def list_raster3d(mapset: str = None) -> list[str]:
+    def list_raster3d(mapset: str | None = None) -> list[str]:
         return gs.list_strings("raster_3d", mapset=mapset)
 
-    def list_grass_objects(self, mapset: str = None) -> dict[list[str]]:
+    def list_grass_objects(self, mapset: str | None = None) -> dict[str, list[str]]:
         """Return all GRASS objects in a given mapset."""
         objects_dict = {}
         objects_dict["raster"] = self.list_raster(mapset)
@@ -313,18 +377,20 @@ class GrassInterface(object):
         return objects_dict
 
     @staticmethod
-    def get_raster_info(raster_id: str) -> Info:
+    def get_raster_info(raster_id: str) -> dict[str, Any]:
         result = gs.parse_command("r.info", map=raster_id, flags="ge")
         # Strip quotes from string values (r.info returns quoted strings)
         return {k: v.strip('"') if isinstance(v, str) else v for k, v in result.items()}
 
     @staticmethod
-    def get_raster3d_info(raster3d_id):
+    def get_raster3d_info(raster3d_id: str) -> dict[str, Any]:
         result = gs.parse_command("r3.info", map=raster3d_id, flags="gh")
         # Strip quotes from string values (r3.info -gh returns quoted strings)
         return {k: v.strip('"') if isinstance(v, str) else v for k, v in result.items()}
 
-    def get_stds_infos(self, strds_name, stds_type) -> STRDSInfos:
+    def get_stds_infos(
+        self, strds_name: str, stds_type: Literal["strds", "str3ds"]
+    ) -> STRDSInfos:
         strds_id = self.get_id_from_name(strds_name)
         if stds_type not in ["strds", "str3ds"]:
             raise ValueError(
@@ -443,7 +509,7 @@ class GrassInterface(object):
         semantic: str,
         t_type: str,
         stds_type: str,
-        time_unit: Optional[str] = None,
+        time_unit: str | None = None,
     ) -> Self:
         """Create a STDS, create one mapdataset for each map and
         register them in the temporal database.
@@ -479,8 +545,17 @@ class GrassInterface(object):
                     raise TypeError("relative time requires a timedelta object.")
                 if not time_unit:
                     raise TypeError("relative time requires a time_unit.")
-                # Convert timedelta to numeric value in the specified unit
-                rel_time = map_time / pd.Timedelta(1, unit=time_unit)
+                unit_deltas = {
+                    "days": timedelta(days=1),
+                    "hours": timedelta(hours=1),
+                    "minutes": timedelta(minutes=1),
+                    "seconds": timedelta(seconds=1),
+                }
+                try:
+                    unit_delta = unit_deltas[time_unit]
+                except KeyError:
+                    raise ValueError(f"Unsupported relative time unit: {time_unit}")
+                rel_time = map_time / unit_delta
                 map_dts.set_relative_time(rel_time, None, time_unit)
             elif t_type == "absolute":
                 if not isinstance(map_time, datetime):
@@ -511,7 +586,7 @@ class GrassInterface(object):
         )
         return self
 
-    def get_coordinates(self, raster_3d: bool) -> dict[str : np.ndarray]:
+    def get_coordinates(self, raster_3d: bool) -> dict[str, np.ndarray]:
         """return np.ndarray of coordinates from the GRASS region."""
         current_region = self.get_region()
         lim_e = current_region.e
@@ -527,6 +602,18 @@ class GrassInterface(object):
         else:
             dx = current_region.ewres
             dy = current_region.nsres
+        if (
+            lim_e is None
+            or lim_w is None
+            or lim_n is None
+            or lim_s is None
+            or lim_t is None
+            or lim_b is None
+            or dx is None
+            or dy is None
+            or dz is None
+        ):
+            raise ValueError("The current GRASS region is missing coordinate metadata.")
         # GRASS limits are at the edge of the region.
         # In the exported arrays, coordinates are at the center of the cell
         # Stop not changed to include it in the range
